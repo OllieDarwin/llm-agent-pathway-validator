@@ -6,18 +6,20 @@ import re
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from src.config import PARSER_MODEL, MODEL_CACHE_DIR
+
 
 class ResponseParser:
     """Parses plaintext biomedical reasoning into structured JSON."""
 
     def __init__(
         self,
-        model_name: str = "osmosis-ai/Osmosis-Structure-0.6B",
+        model_name: str | None = None,
         cache_dir: str | None = None,
         device: str | None = None,
     ):
-        self.model_name = model_name
-        self.cache_dir = cache_dir
+        self.model_name = model_name or PARSER_MODEL
+        self.cache_dir = cache_dir or MODEL_CACHE_DIR
 
         if device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -182,76 +184,3 @@ Or if no valid interactions: []
 
         # Max 3 interactions
         return valid[:3]
-
-
-class LightweightParser:
-    """
-    Regex-based parser for simpler/faster extraction.
-    Use when parser model is unavailable or for quick validation.
-    """
-
-    # Patterns indicating a VALID interaction (positive signals)
-    POSITIVE_PATTERNS = [
-        r"(?:5\.|conclusion:?).*?\byes\b",  # Section 5 or CONCLUSION says YES
-        r"direct\s+interaction\s+check:?\s*yes",
-        r"there\s+is\s+a\s+valid\s+(?:direct\s+)?interaction",
-        r"valid\s+direct\s+interaction",
-        r"fda[- ]approved?\s+for",
-        r"phase\s+(?:iii|3)\s+(?:trial|data|evidence)",
-    ]
-
-    # Patterns indicating rejection (only in conclusion context)
-    REJECTION_PATTERNS = [
-        r"(?:5\.|conclusion:?).*?no\s+valid\s+(?:direct\s+)?interaction",
-        r"(?:5\.|conclusion:?).*?\bno\b.*?interaction",
-        r"conclusion:?\s*no\b",
-        r"no\s+phase\s+(?:iii|3)\s+(?:clinical\s+)?(?:trial|data|evidence)",
-        r"return(?:s|ing)?\s*\[\s*\]",
-        r"empty\s+array",
-    ]
-
-    # Patterns to extract cancer types
-    CANCER_PATTERNS = [
-        r"fda[- ]approved\s+(?:for|in)\s+([A-Za-z\s]+(?:cancer|carcinoma|leukemia|lymphoma|melanoma|myeloma))",
-        r"(?:indicated|approved)\s+for\s+(?:treating\s+)?([A-Za-z\s]+(?:cancer|carcinoma|leukemia|lymphoma|melanoma|myeloma))",
-        r"(?:cml|aml|all|nsclc|sclc|hcc|rcc|crc)",
-    ]
-
-    @classmethod
-    def is_rejection(cls, text: str) -> bool:
-        """Check if the text indicates no valid interaction."""
-        text_lower = text.lower()
-
-        # First check for positive signals - if found, not a rejection
-        for pattern in cls.POSITIVE_PATTERNS:
-            if re.search(pattern, text_lower, re.IGNORECASE | re.DOTALL):
-                return False
-
-        # Then check for rejection patterns
-        for pattern in cls.REJECTION_PATTERNS:
-            if re.search(pattern, text_lower, re.IGNORECASE | re.DOTALL):
-                return True
-
-        # Default: not a rejection, let the parser model decide
-        return False
-
-    @classmethod
-    def extract_cancer_types(cls, text: str) -> list[str]:
-        """Extract mentioned cancer types from text."""
-        cancers = []
-        text_lower = text.lower()
-
-        for pattern in cls.CANCER_PATTERNS:
-            matches = re.findall(pattern, text_lower, re.IGNORECASE)
-            cancers.extend(matches)
-
-        # Deduplicate and clean
-        seen = set()
-        clean = []
-        for c in cancers:
-            c_clean = c.strip().title()
-            if c_clean not in seen:
-                seen.add(c_clean)
-                clean.append(c_clean)
-
-        return clean[:3]

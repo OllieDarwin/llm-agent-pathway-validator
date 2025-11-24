@@ -5,7 +5,7 @@ from enum import Enum
 
 from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
-from src.models.parser import ResponseParser, LightweightParser
+from src.models.parser import ResponseParser
 
 
 class AgentEffect(str, Enum):
@@ -104,10 +104,6 @@ def generate_interaction(
 
     plaintext = model.generate(prompt, max_new_tokens=1024, temperature=0.3)
 
-    # Quick check: if plaintext indicates rejection, skip parsing
-    if LightweightParser.is_rejection(plaintext):
-        return []
-
     # Parse plaintext into structured JSON
     if parser is not None:
         interaction_dicts = parser.parse_interaction(
@@ -150,9 +146,6 @@ def generate_interaction_with_reasoning(
     )
 
     plaintext = model.generate(prompt, max_new_tokens=1024, temperature=0.3)
-
-    if LightweightParser.is_rejection(plaintext):
-        return [], plaintext
 
     if parser is not None:
         interaction_dicts = parser.parse_interaction(

@@ -6,11 +6,11 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import MEDIPHI_MODEL, PARSER_MODEL, MODEL_CACHE_DIR
+from src.config import MEDIPHI_MODEL, MODEL_CACHE_DIR
 from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
 from src.models.parser import ResponseParser
-from src.stages.generate import generate_interaction, generate_interaction_with_reasoning
+from src.stages.generate import generate_interaction_with_reasoning
 
 
 # Test cases from logic-flow.md
@@ -175,10 +175,7 @@ def main():
     print("MediPhi loaded.\n")
 
     print("Loading parser model...")
-    parser = ResponseParser(
-        model_name=PARSER_MODEL,
-        cache_dir=MODEL_CACHE_DIR,
-    )
+    parser = ResponseParser()  # Uses defaults from config
     parser.load()
     print("Parser loaded.\n")
 
