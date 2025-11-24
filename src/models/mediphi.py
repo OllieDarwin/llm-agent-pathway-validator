@@ -83,11 +83,7 @@ class MediPhiModel:
             skip_special_tokens=True,
         )
 
-        print(f"[MEDIPHI DEBUG] Response length before truncation: {len(response)} chars")
-
-        # Stop at conclusion - prevent over-generation
-        response = self._truncate_at_conclusion(response)
-        print(f"[MEDIPHI DEBUG] Response length after truncation: {len(response)} chars")
+        print(f"[MEDIPHI DEBUG] Response length: {len(response)} chars")
         return response.strip()
 
     def _truncate_at_conclusion(self, text: str) -> str:
