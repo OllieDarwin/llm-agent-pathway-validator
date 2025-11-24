@@ -74,10 +74,13 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
     print("\n=== POSITIVE CONTROLS (should return interactions) ===\n")
     for test in POSITIVE_CONTROLS:
         print(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
+        print("Generating MediPhi analysis...")
 
         interactions, reasoning = generate_interaction_with_reasoning(
             test["agent"], test["pathway"], model, parser
         )
+
+        print("MediPhi analysis complete.")
 
         print(f"DEBUG: MediPhi reasoning length: {len(reasoning)} chars")
         print(f"DEBUG: Number of interactions returned: {len(interactions)}")

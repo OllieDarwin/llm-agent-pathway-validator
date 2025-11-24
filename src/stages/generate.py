@@ -102,7 +102,9 @@ def generate_interaction(
         pathway_name=pathway.name,
     )
 
-    plaintext = model.generate(prompt, max_new_tokens=1024, temperature=0.3)
+    print(f"[STAGE1] Calling MediPhi model (max_tokens=512)...")
+    plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
+    print(f"[STAGE1] MediPhi returned {len(plaintext)} chars")
 
     # Parse plaintext into structured JSON
     if parser is not None:
@@ -145,7 +147,9 @@ def generate_interaction_with_reasoning(
         pathway_name=pathway.name,
     )
 
-    plaintext = model.generate(prompt, max_new_tokens=1024, temperature=0.3)
+    print(f"[STAGE1] Calling MediPhi model (max_tokens=512)...")
+    plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
+    print(f"[STAGE1] MediPhi returned {len(plaintext)} chars")
 
     if parser is not None:
         interaction_dicts = parser.parse_interaction(
