@@ -1,9 +1,12 @@
 # Core ML
-torch>=2.0.0
-transformers>=4.36.0
+torch>=2.1.0
+transformers>=4.38.0,<4.52.0
 
 # Data processing
 pandas>=2.0.0
+
+# Utilities
+accelerate>=0.25.0
 
 # API clients (Stage 2)
 # exa-py>=1.0.0  # Uncomment when implementing Stage 2

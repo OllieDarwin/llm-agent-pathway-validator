@@ -190,17 +190,24 @@ class LightweightParser:
     Use when parser model is unavailable or for quick validation.
     """
 
-    # Patterns to detect rejection
+    # Patterns indicating a VALID interaction (positive signals)
+    POSITIVE_PATTERNS = [
+        r"(?:5\.|conclusion:?).*?\byes\b",  # Section 5 or CONCLUSION says YES
+        r"direct\s+interaction\s+check:?\s*yes",
+        r"there\s+is\s+a\s+valid\s+(?:direct\s+)?interaction",
+        r"valid\s+direct\s+interaction",
+        r"fda[- ]approved?\s+for",
+        r"phase\s+(?:iii|3)\s+(?:trial|data|evidence)",
+    ]
+
+    # Patterns indicating rejection (only in conclusion context)
     REJECTION_PATTERNS = [
-        r"no\s+(?:valid|direct)\s+interaction",
-        r"empty\s+array",
+        r"(?:5\.|conclusion:?).*?no\s+valid\s+(?:direct\s+)?interaction",
+        r"(?:5\.|conclusion:?).*?\bno\b.*?interaction",
+        r"conclusion:?\s*no\b",
+        r"no\s+phase\s+(?:iii|3)\s+(?:clinical\s+)?(?:trial|data|evidence)",
         r"return(?:s|ing)?\s*\[\s*\]",
-        r"does\s+not\s+(?:directly\s+)?(?:target|interact|affect)",
-        r"not\s+a\s+(?:core\s+)?component",
-        r"no\s+fda\s+approval",
-        r"no\s+phase\s+(?:iii|3)",
-        r"indirect\s+(?:mechanism|effect)",
-        r"downstream\s+effect",
+        r"empty\s+array",
     ]
 
     # Patterns to extract cancer types
@@ -214,9 +221,18 @@ class LightweightParser:
     def is_rejection(cls, text: str) -> bool:
         """Check if the text indicates no valid interaction."""
         text_lower = text.lower()
+
+        # First check for positive signals - if found, not a rejection
+        for pattern in cls.POSITIVE_PATTERNS:
+            if re.search(pattern, text_lower, re.IGNORECASE | re.DOTALL):
+                return False
+
+        # Then check for rejection patterns
         for pattern in cls.REJECTION_PATTERNS:
-            if re.search(pattern, text_lower):
+            if re.search(pattern, text_lower, re.IGNORECASE | re.DOTALL):
                 return True
+
+        # Default: not a rejection, let the parser model decide
         return False
 
     @classmethod
