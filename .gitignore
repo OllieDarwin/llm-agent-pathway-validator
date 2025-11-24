@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
+
+# Model caches (large files)
+hf_cache/
+pip_cache/
+
+# Outputs
+outputs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+/resources/
+*.md
+!README.md

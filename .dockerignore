@@ -1,0 +1,31 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Local caches (will be mounted as volumes or downloaded in container)
+hf_cache/
+pip_cache/
+
+# Logs and outputs
+*.log
+outputs/
+
+# Local config
+.env
+.env.local
+
+/resources/
+*.md
+!README.md

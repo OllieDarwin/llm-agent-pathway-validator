@@ -1,0 +1,12 @@
+# Core ML
+torch>=2.0.0
+transformers>=4.36.0
+
+# Data processing
+pandas>=2.0.0
+
+# API clients (Stage 2)
+# exa-py>=1.0.0  # Uncomment when implementing Stage 2
+
+# Testing
+pytest>=7.0.0

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  validator:
+    build: .
+    volumes:
+      # Persist model cache between runs
+      - hf_cache:/app/hf_cache
+      # Mount source for development
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./resources:/app/resources
+    environment:
+      - PYTHONPATH=/app
+      - HF_HOME=/app/hf_cache
+      - TRANSFORMERS_CACHE=/app/hf_cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # CPU-only variant for testing without GPU
+  validator-cpu:
+    build: .
+    volumes:
+      - hf_cache:/app/hf_cache
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./resources:/app/resources
+    environment:
+      - PYTHONPATH=/app
+      - HF_HOME=/app/hf_cache
+      - TRANSFORMERS_CACHE=/app/hf_cache
+      - CUDA_VISIBLE_DEVICES=""
+
+volumes:
+  hf_cache:
