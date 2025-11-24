@@ -74,7 +74,26 @@ class MediPhiModel:
             outputs[0][inputs["input_ids"].shape[1]:],
             skip_special_tokens=True,
         )
+
+        # Stop at conclusion - prevent over-generation
+        response = self._truncate_at_conclusion(response)
         return response.strip()
+
+    def _truncate_at_conclusion(self, text: str) -> str:
+        """Truncate response after the conclusion section."""
+        # Look for end of conclusion section
+        markers = [
+            "\n\nAs a clinical",  # Start of new prompt
+            "\n\n###",  # New section marker
+            "\n\n---",  # Separator
+            "\nBegin your analysis:",  # Prompt leak
+        ]
+
+        for marker in markers:
+            if marker in text:
+                text = text.split(marker)[0]
+
+        return text
 
     def generate_json(
         self,

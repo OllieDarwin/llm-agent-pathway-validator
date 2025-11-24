@@ -13,26 +13,26 @@ from src.models.parser import ResponseParser
 from src.stages.generate import generate_interaction_with_reasoning
 
 
-# Test cases from logic-flow.md
+# Test cases - using pathways from all-tsnc-pathways.csv
 POSITIVE_CONTROLS = [
-    # Should return non-empty list
-    {
-        "agent": Agent(name="Imatinib-mesylate", category="immunotherapy"),
-        "pathway": Pathway(name="Cell Cycle"),  # BCR-ABL affects cell cycle
-        "description": "Imatinib + BCR-ABL signaling (mapped to Cell Cycle)",
-        "expected_cancers": ["CML"],
-    },
+    # Should return non-empty list (direct target in pathway)
     {
         "agent": Agent(name="Trastuzumab", category="immunotherapy"),
         "pathway": Pathway(name="ERBB2 Signaling"),
-        "description": "Trastuzumab + ERBB2 Signaling + Breast cancer",
+        "description": "Trastuzumab + ERBB2 Signaling (HER2 is pathway component)",
         "expected_cancers": ["Breast cancer"],
     },
     {
         "agent": Agent(name="Vemurafenib", category="immunotherapy"),
         "pathway": Pathway(name="MAPK Signaling"),
-        "description": "Vemurafenib + MAPK Signaling + Melanoma (BRAF V600E)",
+        "description": "Vemurafenib + MAPK Signaling (BRAF is pathway component)",
         "expected_cancers": ["Melanoma"],
+    },
+    {
+        "agent": Agent(name="Erlotinib", category="immunotherapy"),
+        "pathway": Pathway(name="EGFR Signaling"),
+        "description": "Erlotinib + EGFR Signaling (EGFR is pathway component)",
+        "expected_cancers": ["NSCLC"],
     },
 ]
 
@@ -41,22 +41,22 @@ NEGATIVE_CONTROLS = [
     {
         "agent": Agent(name="Curcumin", category="natural_agent"),
         "pathway": Pathway(name="NF-kB Signaling"),
-        "description": "Curcumin + any pathway (no Phase III data)",
+        "description": "Curcumin + NF-kB (no Phase III data)",
     },
     {
         "agent": Agent(name="Pembrolizumab", category="immunotherapy"),
         "pathway": Pathway(name="Tumor Antigen"),
-        "description": "Pembrolizumab + Tumor Antigen pathway (indirect mechanism)",
+        "description": "Pembrolizumab + Tumor Antigen (PD-1 not in pathway)",
     },
     {
         "agent": Agent(name="Gemcitabine", category="chemotherapy"),
         "pathway": Pathway(name="Androgen Signaling"),
-        "description": "Gemcitabine + Androgen Signaling (no direct connection)",
+        "description": "Gemcitabine + Androgen Signaling (no connection)",
     },
     {
-        "agent": Agent(name="Metformin", category="immunotherapy"),
-        "pathway": Pathway(name="mTOR Signaling"),
-        "description": "Metformin + mTOR Signaling (off-label, multiple mechanisms)",
+        "agent": Agent(name="Imatinib-mesylate", category="immunotherapy"),
+        "pathway": Pathway(name="Cell Cycle"),
+        "description": "Imatinib + Cell Cycle (BCR-ABL not a Cell Cycle component)",
     },
 ]
 
