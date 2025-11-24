@@ -22,7 +22,7 @@ class ResponseParser:
         self.cache_dir = cache_dir or MODEL_CACHE_DIR
 
         if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = "cuda"
         else:
             self.device = device
 

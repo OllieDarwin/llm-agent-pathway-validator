@@ -60,6 +60,10 @@ class MediPhiModel:
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
+        # Debug: check input token count
+        input_token_count = inputs["input_ids"].shape[1]
+        print(f"[MEDIPHI DEBUG] Input tokens: {input_token_count}")
+
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
@@ -70,13 +74,20 @@ class MediPhiModel:
             )
 
         # Decode only the new tokens
+        output_token_count = outputs[0].shape[0]
+        new_token_count = output_token_count - inputs["input_ids"].shape[1]
+        print(f"[MEDIPHI DEBUG] Output tokens generated: {new_token_count}")
+
         response = self.tokenizer.decode(
             outputs[0][inputs["input_ids"].shape[1]:],
             skip_special_tokens=True,
         )
 
+        print(f"[MEDIPHI DEBUG] Response length before truncation: {len(response)} chars")
+
         # Stop at conclusion - prevent over-generation
         response = self._truncate_at_conclusion(response)
+        print(f"[MEDIPHI DEBUG] Response length after truncation: {len(response)} chars")
         return response.strip()
 
     def _truncate_at_conclusion(self, text: str) -> str:
@@ -89,9 +100,13 @@ class MediPhiModel:
             "\nBegin your analysis:",  # Prompt leak
         ]
 
+        original_length = len(text)
         for marker in markers:
             if marker in text:
+                print(f"[TRUNCATE DEBUG] Found marker '{marker[:20]}...' at position {text.index(marker)}")
                 text = text.split(marker)[0]
+                print(f"[TRUNCATE DEBUG] Truncated from {original_length} to {len(text)} chars")
+                break
 
         return text
 

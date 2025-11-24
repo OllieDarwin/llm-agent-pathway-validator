@@ -72,12 +72,23 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
     }
 
     print("\n=== POSITIVE CONTROLS (should return interactions) ===\n")
+
+    # Lazy load parser
+    parser_loaded = None
+
     for test in POSITIVE_CONTROLS:
         print(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
         print("Generating MediPhi analysis...")
 
+        # Load parser only when needed
+        if parser is None and parser_loaded is None:
+            print("Loading parser model...")
+            parser_loaded = ResponseParser()
+            parser_loaded.load()
+            print("Parser loaded.")
+
         interactions, reasoning = generate_interaction_with_reasoning(
-            test["agent"], test["pathway"], model, parser
+            test["agent"], test["pathway"], model, parser_loaded
         )
 
         print("MediPhi analysis complete.")
@@ -122,7 +133,7 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
     print("\n=== NEGATIVE CONTROLS (should return empty) ===\n")
     for test in NEGATIVE_CONTROLS:
         interactions, reasoning = generate_interaction_with_reasoning(
-            test["agent"], test["pathway"], model, parser
+            test["agent"], test["pathway"], model, parser_loaded if parser is None else parser
         )
         passed = len(interactions) == 0
 
@@ -182,10 +193,9 @@ def main():
     model.load()
     print("MediPhi loaded.\n")
 
-    print("Loading parser model...")
-    parser = ResponseParser()  # Uses defaults from config
-    parser.load()
-    print("Parser loaded.\n")
+    # Don't load parser yet - load on-demand
+    print("Parser model will be loaded on-demand to save memory.\n")
+    parser = None
 
     results = run_tests(model, parser)
 
