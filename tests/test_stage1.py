@@ -73,9 +73,15 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
 
     print("\n=== POSITIVE CONTROLS (should return interactions) ===\n")
     for test in POSITIVE_CONTROLS:
+        print(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
+
         interactions, reasoning = generate_interaction_with_reasoning(
             test["agent"], test["pathway"], model, parser
         )
+
+        print(f"DEBUG: MediPhi reasoning length: {len(reasoning)} chars")
+        print(f"DEBUG: Number of interactions returned: {len(interactions)}")
+
         passed = len(interactions) > 0
 
         if passed:
@@ -85,15 +91,14 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
             results["positive_failed"] += 1
             status = "FAIL"
 
-        print(f"[{status}] {test['description']}")
+        print(f"\n[{status}] {test['description']}")
         if interactions:
             for i in interactions:
-                print(f"       -> {i.cancer_type} ({i.agent_effect} {i.primary_target})")
+                print(f"       -> {i.cancer_type} ({i.agent_effect.value} {i.primary_target})")
         else:
             print("       -> No interactions returned")
+            print(f"       DEBUG: Full reasoning:\n{reasoning}")
 
-        if verbose and not passed:
-            print(f"       REASONING:\n{reasoning[:500]}...")
         print()
 
         results["details"].append({

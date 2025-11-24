@@ -103,7 +103,12 @@ Or if no valid interactions: []
             skip_special_tokens=True,
         ).strip()
 
-        return self._extract_json(response, agent_name, pathway_name)
+        print(f"\n[PARSER DEBUG] Raw parser output:\n{response}\n")
+
+        result = self._extract_json(response, agent_name, pathway_name)
+        print(f"[PARSER DEBUG] Extracted {len(result)} interactions")
+
+        return result
 
     def _extract_json(
         self,
