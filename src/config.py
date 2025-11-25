@@ -12,7 +12,8 @@ PATHWAYS_CSV = DATA_DIR / "all-tsnc-pathways.csv"
 MODEL_CACHE_DIR = PROJECT_ROOT / "hf_cache"
 
 # Model configuration
-MEDIPHI_MODEL = "microsoft/MediPhi-PubMed"  # Biomedical reasoning
+MEDIPHI_MODEL = "microsoft/MediPhi-PubMed"  # Biomedical reasoning (Step 1)
+PARSER_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"  # JSON extraction (Step 2)
 
 # All models to download for offline use
-MODELS = [MEDIPHI_MODEL]
+MODELS = [MEDIPHI_MODEL, PARSER_MODEL]

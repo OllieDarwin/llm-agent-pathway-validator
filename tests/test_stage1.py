@@ -6,9 +6,10 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import MEDIPHI_MODEL, MODEL_CACHE_DIR
+from src.config import MEDIPHI_MODEL, PARSER_MODEL, MODEL_CACHE_DIR
 from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
+from src.models.parser import ResponseParser
 from src.stages.generate import generate_interaction_with_reasoning
 
 
@@ -60,7 +61,7 @@ NEGATIVE_CONTROLS = [
 ]
 
 
-def run_tests(model: MediPhiModel, verbose: bool = True) -> dict:
+def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True) -> dict:
     """Run all test cases and return results."""
     results = {
         "positive_passed": 0,
@@ -74,13 +75,13 @@ def run_tests(model: MediPhiModel, verbose: bool = True) -> dict:
 
     for test in POSITIVE_CONTROLS:
         print(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
-        print("Generating MediPhi analysis...")
+        print("Generating analysis...")
 
         interactions, reasoning = generate_interaction_with_reasoning(
-            test["agent"], test["pathway"], model
+            test["agent"], test["pathway"], model, parser
         )
 
-        print("MediPhi analysis complete.")
+        print("Analysis complete.")
 
         print(f"DEBUG: MediPhi reasoning length: {len(reasoning)} chars")
         print(f"DEBUG: Number of interactions returned: {len(interactions)}")
@@ -122,7 +123,7 @@ def run_tests(model: MediPhiModel, verbose: bool = True) -> dict:
     print("\n=== NEGATIVE CONTROLS (should return empty) ===\n")
     for test in NEGATIVE_CONTROLS:
         interactions, reasoning = generate_interaction_with_reasoning(
-            test["agent"], test["pathway"], model
+            test["agent"], test["pathway"], model, parser
         )
         passed = len(interactions) == 0
 
@@ -174,6 +175,10 @@ def run_tests(model: MediPhiModel, verbose: bool = True) -> dict:
 
 
 def main():
+    print("=== TWO-STEP ARCHITECTURE ===")
+    print("Step 1: MediPhi-PubMed (biomedical reasoning)")
+    print("Step 2: Mistral-7B-Instruct (JSON extraction)\n")
+
     print("Loading MediPhi-PubMed model...")
     model = MediPhiModel(
         model_name=MEDIPHI_MODEL,
@@ -182,9 +187,15 @@ def main():
     model.load()
     print("MediPhi loaded.\n")
 
-    print("SIMPLIFIED ARCHITECTURE: Single model, no parser needed.\n")
+    print("Loading Mistral parser model...")
+    parser = ResponseParser(
+        model_name=PARSER_MODEL,
+        cache_dir=MODEL_CACHE_DIR,
+    )
+    parser.load()
+    print("Parser loaded.\n")
 
-    results = run_tests(model)
+    results = run_tests(model, parser)
 
     # Success criteria: >=90% correct classification
     total_passed = results["positive_passed"] + results["negative_passed"]

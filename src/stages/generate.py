@@ -1,19 +1,17 @@
 """Stage 1: generateInteraction() - Initial biological filter.
 
-SIMPLIFIED ARCHITECTURE:
-- Single MediPhi model call that outputs JSON directly
-- No separate parser model needed
-- Clear YES/NO decision structure
-- Robust JSON extraction with fallback parsing
+TWO-STEP ARCHITECTURE:
+- Step 1: MediPhi generates plaintext biomedical reasoning
+- Step 2: Mistral parser extracts structured JSON from reasoning
+- Separation of concerns: domain knowledge vs. structured output
 """
 
-import json
-import re
 from dataclasses import dataclass
 from enum import Enum
 
 from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
+from src.models.parser import ResponseParser
 
 
 class AgentEffect(str, Enum):
@@ -59,172 +57,85 @@ class Interaction:
         )
 
 
-# Simplified JSON-focused prompt for MediPhi
-MEDIPHI_PROMPT = """You are a clinical oncology specialist evaluating therapeutic agent-pathway interactions.
+# Plaintext reasoning prompt for MediPhi (Step 1)
+MEDIPHI_PROMPT = """You are a clinical oncology pharmacist analyzing therapeutic agent-pathway interactions.
 
 AGENT: {agent_name}
 CATEGORY: {agent_category}
 PATHWAY: {pathway_name}
 
-TASK: Determine if this agent DIRECTLY targets a core component of this pathway.
+TASK: Evaluate whether this agent DIRECTLY targets a core component of this pathway.
 
-EVALUATION CRITERIA:
-1. Is the agent's PRIMARY molecular target a core component of this pathway?
-2. Does the agent have FDA approval OR positive Phase III data?
-3. Is this pathway the agent's PRIMARY mechanism (not downstream/indirect)?
+Provide a structured analysis covering:
 
-STRICT EXCLUSIONS:
-- Natural compounds without Phase III data (Curcumin, Resveratrol, etc.) → return []
-- Downstream effects (e.g., PD-1 affecting tumor antigens) → return []
-- Indirect mechanisms or pathway crosstalk → return []
-- Secondary/off-label mechanisms → return []
+1. MOLECULAR TARGET: What is the agent's primary molecular target?
 
-OUTPUT FORMAT:
-Return ONLY a JSON array. If NO valid interaction, return empty array [].
-If valid interaction exists, return 1-3 cancer types with this structure:
+2. PATHWAY COMPONENTS: What are the core components of this pathway?
 
-[
-  {{
-    "agentName": "{agent_name}",
-    "pathwayName": "{pathway_name}",
-    "agentEffect": "inhibits|activates|modulates",
-    "primaryTarget": "target protein/gene name",
-    "cancerType": "specific cancer type",
-    "targetStatus": "overexpressed|overactive|mutated|present|lost",
-    "mechanismType": "direct"
-  }}
-]
+3. DIRECT INTERACTION: Is the agent's target a core component of this pathway? (YES/NO)
 
-Return JSON only, no explanation:"""
+4. CLINICAL EVIDENCE: Does the agent have FDA approval or positive Phase III data?
 
+5. PRIMARY MECHANISM: Is this pathway the agent's PRIMARY mechanism of action?
 
-def _extract_json_from_response(response: str) -> list[dict]:
-    """
-    Extract JSON array from model response with multiple fallback strategies.
+6. CONCLUSION:
+   - If YES: List up to 3 cancer types where this interaction is clinically relevant
+   - For each: specify the agent effect (inhibits/activates/modulates), primary target, and target status (overexpressed/overactive/mutated/present/lost)
+   - If NO: Explain why (e.g., no Phase III data, indirect mechanism, target not in pathway)
 
-    Returns empty list if no valid JSON found.
-    """
-    # Strategy 1: Direct JSON parse
-    try:
-        data = json.loads(response.strip())
-        if isinstance(data, list):
-            return data
-    except json.JSONDecodeError:
-        pass
+STRICT CRITERIA:
+- Natural compounds require Phase III clinical trial data
+- Only DIRECT mechanisms (exclude downstream effects)
+- Target must be a CORE pathway component
+- Must be PRIMARY mechanism, not secondary/off-label
 
-    # Strategy 2: Extract from markdown code blocks
-    if "```" in response:
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", response)
-        if match:
-            try:
-                data = json.loads(match.group(1).strip())
-                if isinstance(data, list):
-                    return data
-            except json.JSONDecodeError:
-                pass
-
-    # Strategy 3: Find array brackets
-    start = response.find("[")
-    end = response.rfind("]") + 1
-    if start != -1 and end > start:
-        try:
-            data = json.loads(response[start:end])
-            if isinstance(data, list):
-                return data
-        except json.JSONDecodeError:
-            pass
-
-    # Strategy 4: Look for single object and wrap in array
-    start = response.find("{")
-    end = response.rfind("}") + 1
-    if start != -1 and end > start:
-        try:
-            obj = json.loads(response[start:end])
-            if isinstance(obj, dict):
-                return [obj]
-        except json.JSONDecodeError:
-            pass
-
-    return []
-
-
-def _validate_interaction_dict(data: dict, agent_name: str, pathway_name: str) -> bool:
-    """Validate that interaction dict has required fields and valid values."""
-    required_fields = [
-        "agentName", "pathwayName", "agentEffect",
-        "primaryTarget", "cancerType", "targetStatus", "mechanismType"
-    ]
-
-    # Check all required fields present
-    if not all(field in data for field in required_fields):
-        return False
-
-    # Validate mechanism type is direct
-    if data.get("mechanismType") != "direct":
-        return False
-
-    # Validate enum values
-    if data["agentEffect"] not in ["inhibits", "activates", "modulates"]:
-        return False
-    if data["targetStatus"] not in ["overexpressed", "overactive", "present", "mutated", "lost"]:
-        return False
-
-    # Ensure names match
-    data["agentName"] = agent_name
-    data["pathwayName"] = pathway_name
-
-    return True
+Begin analysis:"""
 
 
 def generate_interaction(
     agent: Agent,
     pathway: Pathway,
     model: MediPhiModel,
-    parser=None,  # Kept for backward compatibility but unused
+    parser: ResponseParser,
 ) -> list[Interaction]:
     """
     Stage 1: Generate validated agent-pathway-cancer interactions.
 
-    SIMPLIFIED: Single MediPhi call outputs JSON directly, no separate parser.
+    TWO-STEP PROCESS:
+    1. MediPhi generates plaintext biomedical reasoning
+    2. Mistral parser extracts structured JSON from reasoning
 
     Returns empty list if no valid interaction exists.
     Returns 1-3 Interaction objects for valid combinations.
     """
+    # Step 1: Generate plaintext reasoning from MediPhi
     prompt = MEDIPHI_PROMPT.format(
         agent_name=agent.name,
         agent_category=agent.category,
         pathway_name=pathway.name,
     )
 
-    print(f"[STAGE1] Generating interaction for {agent.name} + {pathway.name}")
+    print(f"[STAGE1] Step 1: MediPhi analyzing {agent.name} + {pathway.name}")
+    plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
+    print(f"[STAGE1] MediPhi generated {len(plaintext)} chars of reasoning")
 
-    # Generate JSON directly from MediPhi
-    response = model.generate(prompt, max_new_tokens=400, temperature=0.1)
+    # Step 2: Parse plaintext into structured JSON
+    print(f"[STAGE1] Step 2: Mistral parsing to JSON")
+    interaction_dicts = parser.parse_interaction(
+        plaintext=plaintext,
+        agent_name=agent.name,
+        pathway_name=pathway.name,
+    )
 
-    print(f"[STAGE1] Response length: {len(response)} chars")
-
-    # Extract JSON from response
-    interaction_dicts = _extract_json_from_response(response)
-
-    if not interaction_dicts:
-        print(f"[STAGE1] No JSON found in response")
-        return []
-
-    print(f"[STAGE1] Extracted {len(interaction_dicts)} potential interactions")
-
-    # Validate and convert to Interaction objects
+    # Convert to Interaction objects
     interactions = []
     for item in interaction_dicts:
-        if not _validate_interaction_dict(item, agent.name, pathway.name):
-            print(f"[STAGE1] Skipping invalid interaction: {item}")
-            continue
-
         try:
             interaction = Interaction.from_dict(item)
             interactions.append(interaction)
             print(f"[STAGE1] ✓ Valid: {interaction.cancer_type} ({interaction.agent_effect.value} {interaction.primary_target})")
         except (KeyError, ValueError) as e:
-            print(f"[STAGE1] Failed to parse interaction: {e}")
+            print(f"[STAGE1] Failed to create Interaction: {e}")
             continue
 
     return interactions[:3]
@@ -234,54 +145,50 @@ def generate_interaction_with_reasoning(
     agent: Agent,
     pathway: Pathway,
     model: MediPhiModel,
-    parser=None,  # Kept for backward compatibility but unused
+    parser: ResponseParser,
 ) -> tuple[list[Interaction], str]:
     """
-    Same as generate_interaction but also returns the raw response.
+    Same as generate_interaction but also returns the plaintext reasoning.
 
     Useful for debugging and logging.
     """
+    # Step 1: Generate plaintext reasoning
     prompt = MEDIPHI_PROMPT.format(
         agent_name=agent.name,
         agent_category=agent.category,
         pathway_name=pathway.name,
     )
 
-    print(f"[STAGE1] Generating interaction for {agent.name} + {pathway.name}")
+    print(f"[STAGE1] Step 1: MediPhi analyzing {agent.name} + {pathway.name}")
+    plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
+    print(f"[STAGE1] MediPhi generated {len(plaintext)} chars of reasoning")
 
-    response = model.generate(prompt, max_new_tokens=400, temperature=0.1)
+    # Step 2: Parse to JSON
+    print(f"[STAGE1] Step 2: Mistral parsing to JSON")
+    interaction_dicts = parser.parse_interaction(
+        plaintext=plaintext,
+        agent_name=agent.name,
+        pathway_name=pathway.name,
+    )
 
-    print(f"[STAGE1] Response length: {len(response)} chars")
-
-    interaction_dicts = _extract_json_from_response(response)
-
-    if not interaction_dicts:
-        print(f"[STAGE1] No JSON found in response")
-        return [], response
-
-    print(f"[STAGE1] Extracted {len(interaction_dicts)} potential interactions")
-
+    # Convert to Interaction objects
     interactions = []
     for item in interaction_dicts:
-        if not _validate_interaction_dict(item, agent.name, pathway.name):
-            print(f"[STAGE1] Skipping invalid interaction: {item}")
-            continue
-
         try:
             interaction = Interaction.from_dict(item)
             interactions.append(interaction)
             print(f"[STAGE1] ✓ Valid: {interaction.cancer_type} ({interaction.agent_effect.value} {interaction.primary_target})")
         except (KeyError, ValueError) as e:
-            print(f"[STAGE1] Failed to parse interaction: {e}")
+            print(f"[STAGE1] Failed to create Interaction: {e}")
             continue
 
-    return interactions[:3], response
+    return interactions[:3], plaintext
 
 
 def generate_interactions_batch(
     combinations: list[tuple[Agent, Pathway]],
     model: MediPhiModel,
-    parser=None,  # Kept for backward compatibility but unused
+    parser: ResponseParser,
     progress_callback: callable = None,
 ) -> dict[tuple[str, str], list[Interaction]]:
     """
@@ -293,7 +200,7 @@ def generate_interactions_batch(
 
     for i, (agent, pathway) in enumerate(combinations):
         key = (agent.name, pathway.name)
-        results[key] = generate_interaction(agent, pathway, model)
+        results[key] = generate_interaction(agent, pathway, model, parser)
 
         if progress_callback:
             progress_callback(i + 1, len(combinations), agent.name, pathway.name)
