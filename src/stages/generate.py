@@ -64,30 +64,38 @@ AGENT: {agent_name}
 CATEGORY: {agent_category}
 PATHWAY: {pathway_name}
 
-TASK: Evaluate whether this agent DIRECTLY targets a core component of this pathway.
+CRITICAL: You must evaluate if this SPECIFIC agent targets THIS SPECIFIC pathway name. Do NOT confuse with similar pathways.
 
 Provide a structured analysis covering:
 
-1. MOLECULAR TARGET: What is the agent's primary molecular target?
+1. MOLECULAR TARGET: What is {agent_name}'s primary molecular target (specific protein/receptor)?
 
-2. PATHWAY COMPONENTS: What are the core components of this pathway?
+2. PATHWAY COMPONENTS: What are the core components of the pathway called "{pathway_name}"? List 3-5 key proteins/genes.
 
-3. DIRECT INTERACTION: Is the agent's target a core component of this pathway? (YES/NO)
+3. DIRECT INTERACTION CHECK:
+   - Is the agent's target from step 1 listed in the pathway components from step 2? (YES/NO)
+   - If the pathway is "{pathway_name}", does the agent bind/inhibit a component WITH THAT EXACT NAME?
 
-4. CLINICAL EVIDENCE: Does the agent have FDA approval or positive Phase III data?
+4. CLINICAL EVIDENCE:
+   - For NATURAL compounds (Curcumin, Resveratrol, EGCG, Green Tea, Turmeric, etc.): MUST have completed Phase III clinical trials with published results
+   - For FDA-approved drugs: Verify approval status
+   - If no Phase III data exists, answer NO
 
-5. PRIMARY MECHANISM: Is this pathway the agent's PRIMARY mechanism of action?
+5. PRIMARY MECHANISM: Is "{pathway_name}" the agent's PRIMARY mechanism, or is it downstream/secondary?
 
 6. CONCLUSION:
-   - If YES: List up to 3 cancer types where this interaction is clinically relevant
-   - For each: specify the agent effect (inhibits/activates/modulates), primary target, and target status (overexpressed/overactive/mutated/present/lost)
-   - If NO: Explain why (e.g., no Phase III data, indirect mechanism, target not in pathway)
+   - If ALL criteria met: List up to 3 cancer types with agent effect and target status
+   - If ANY criterion fails: State "NO VALID INTERACTION" and explain which criterion failed
+   - Common failure reasons:
+     * Natural compound without Phase III data
+     * Agent targets different pathway (e.g., PD-1 pathway ≠ Tumor Antigen pathway)
+     * Downstream/indirect mechanism only
+     * Target not in core pathway components
 
-STRICT CRITERIA:
-- Natural compounds require Phase III clinical trial data
-- Only DIRECT mechanisms (exclude downstream effects)
-- Target must be a CORE pathway component
-- Must be PRIMARY mechanism, not secondary/off-label
+STRICT RULES:
+- Natural compounds almost always have NO Phase III data → return NO
+- Pathway name must match EXACTLY (don't substitute similar pathways)
+- Only DIRECT binding to pathway components
 
 Begin analysis:"""
 

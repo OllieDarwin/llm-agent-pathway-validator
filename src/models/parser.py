@@ -66,13 +66,28 @@ class ResponseParser:
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
 
+        # Quick check: if analysis explicitly says NO, skip parsing
+        plaintext_lower = plaintext.lower()
+        if any(phrase in plaintext_lower for phrase in [
+            "no valid interaction",
+            "conclusion: no",
+            "does not directly target",
+            "lacks phase iii",
+            "no phase iii data",
+            "no completed phase iii",
+        ]):
+            print(f"[PARSER] Analysis indicates NO interaction, skipping extraction")
+            return []
+
         # Mistral-style instruction format
         prompt = f"""[INST] You are a JSON extraction assistant. Extract structured data from biomedical analysis.
 
 ANALYSIS:
 {plaintext}
 
-TASK: Extract any valid agent-pathway-cancer interactions mentioned in the analysis above.
+TASK: Extract valid agent-pathway-cancer interactions ONLY if the analysis concludes YES.
+
+IMPORTANT: The pathway name must be "{pathway_name}" exactly. If the analysis discusses a different pathway (e.g., "PD-1 pathway" when asked about "Tumor Antigen"), return [].
 
 For each valid interaction, extract this exact JSON structure:
 - agentName: "{agent_name}" (must be exact)
@@ -84,8 +99,9 @@ For each valid interaction, extract this exact JSON structure:
 - mechanismType: must be "direct"
 
 RULES:
-- Only extract if the analysis explicitly supports a valid interaction
-- If the analysis concludes NO valid interaction, return: []
+- If analysis says "NO VALID INTERACTION" or "NO" in conclusion, return: []
+- If analysis mentions Phase III data is lacking, return: []
+- If analysis discusses wrong pathway name, return: []
 - If mechanism is "downstream" or "indirect", return: []
 - Maximum 3 cancer types per agent-pathway pair
 - Return ONLY valid JSON array, nothing else
@@ -203,9 +219,27 @@ Output (JSON only): [/INST]"""
             if item["agentEffect"] not in ["inhibits", "activates", "modulates"]:
                 print(f"[PARSER] Invalid agentEffect: {item['agentEffect']}")
                 continue
-            if item["targetStatus"] not in ["overexpressed", "overactive", "present", "mutated", "lost"]:
-                print(f"[PARSER] Invalid targetStatus: {item['targetStatus']}")
-                continue
+
+            # Handle compound targetStatus (e.g., "overexpressed and mutated")
+            # Extract first valid status if compound
+            target_status = item["targetStatus"].lower()
+            valid_statuses = ["overexpressed", "overactive", "present", "mutated", "lost"]
+
+            # Check if it's already a valid single status
+            if target_status not in valid_statuses:
+                # Try to extract first valid status from compound
+                found_status = None
+                for status in valid_statuses:
+                    if status in target_status:
+                        found_status = status
+                        break
+
+                if found_status:
+                    item["targetStatus"] = found_status
+                    print(f"[PARSER] Normalized compound status '{target_status}' to '{found_status}'")
+                else:
+                    print(f"[PARSER] Invalid targetStatus: {item['targetStatus']}")
+                    continue
 
             valid.append(item)
 
