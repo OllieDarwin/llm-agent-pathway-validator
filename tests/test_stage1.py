@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.config import MEDIPHI_MODEL, MODEL_CACHE_DIR
 from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
-from src.models.parser import ResponseParser
 from src.stages.generate import generate_interaction_with_reasoning
 
 
@@ -61,7 +60,7 @@ NEGATIVE_CONTROLS = [
 ]
 
 
-def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True) -> dict:
+def run_tests(model: MediPhiModel, verbose: bool = True) -> dict:
     """Run all test cases and return results."""
     results = {
         "positive_passed": 0,
@@ -73,22 +72,12 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
 
     print("\n=== POSITIVE CONTROLS (should return interactions) ===\n")
 
-    # Lazy load parser
-    parser_loaded = None
-
     for test in POSITIVE_CONTROLS:
         print(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
         print("Generating MediPhi analysis...")
 
-        # Load parser only when needed
-        if parser is None and parser_loaded is None:
-            print("Loading parser model...")
-            parser_loaded = ResponseParser()
-            parser_loaded.load()
-            print("Parser loaded.")
-
         interactions, reasoning = generate_interaction_with_reasoning(
-            test["agent"], test["pathway"], model, parser_loaded
+            test["agent"], test["pathway"], model
         )
 
         print("MediPhi analysis complete.")
@@ -133,7 +122,7 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
     print("\n=== NEGATIVE CONTROLS (should return empty) ===\n")
     for test in NEGATIVE_CONTROLS:
         interactions, reasoning = generate_interaction_with_reasoning(
-            test["agent"], test["pathway"], model, parser_loaded if parser is None else parser
+            test["agent"], test["pathway"], model
         )
         passed = len(interactions) == 0
 
@@ -193,11 +182,9 @@ def main():
     model.load()
     print("MediPhi loaded.\n")
 
-    # Don't load parser yet - load on-demand
-    print("Parser model will be loaded on-demand to save memory.\n")
-    parser = None
+    print("SIMPLIFIED ARCHITECTURE: Single model, no parser needed.\n")
 
-    results = run_tests(model, parser)
+    results = run_tests(model)
 
     # Success criteria: >=90% correct classification
     total_passed = results["positive_passed"] + results["negative_passed"]

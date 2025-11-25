@@ -1,6 +1,5 @@
 """MediPhi-PubMed model wrapper for biomedical text generation."""
 
-import json
 from pathlib import Path
 
 import torch
@@ -86,51 +85,3 @@ class MediPhiModel:
         print(f"[MEDIPHI DEBUG] Response length: {len(response)} chars")
         return response.strip()
 
-    def _truncate_at_conclusion(self, text: str) -> str:
-        """Truncate response after the conclusion section."""
-        # Look for end of conclusion section
-        markers = [
-            "\n\nAs a clinical",  # Start of new prompt
-            "\n\n###",  # New section marker
-            "\n\n---",  # Separator
-            "\nBegin your analysis:",  # Prompt leak
-        ]
-
-        original_length = len(text)
-        for marker in markers:
-            if marker in text:
-                print(f"[TRUNCATE DEBUG] Found marker '{marker[:20]}...' at position {text.index(marker)}")
-                text = text.split(marker)[0]
-                print(f"[TRUNCATE DEBUG] Truncated from {original_length} to {len(text)} chars")
-                break
-
-        return text
-
-    def generate_json(
-        self,
-        prompt: str,
-        max_new_tokens: int = 512,
-        temperature: float = 0.1,
-    ) -> dict | list | None:
-        """Generate and parse JSON response."""
-        response = self.generate(prompt, max_new_tokens, temperature)
-
-        # Try to extract JSON from response
-        try:
-            # Handle cases where model outputs extra text
-            if "```json" in response:
-                response = response.split("```json")[1].split("```")[0]
-            elif "```" in response:
-                response = response.split("```")[1].split("```")[0]
-
-            return json.loads(response.strip())
-        except json.JSONDecodeError:
-            # Try to find JSON-like content
-            start = response.find("[") if "[" in response else response.find("{")
-            end = response.rfind("]") + 1 if "]" in response else response.rfind("}") + 1
-            if start != -1 and end > start:
-                try:
-                    return json.loads(response[start:end])
-                except json.JSONDecodeError:
-                    pass
-            return None
