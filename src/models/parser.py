@@ -66,7 +66,7 @@ class ResponseParser:
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
 
-        # Quick check: if analysis explicitly says NO, skip parsing
+        # Quick check: if analysis explicitly says NO, skip parsing (NEW: added Phase I check)
         plaintext_lower = plaintext.lower()
         if any(phrase in plaintext_lower for phrase in [
             "no valid interaction",
@@ -75,6 +75,11 @@ class ResponseParser:
             "lacks phase iii",
             "no phase iii data",
             "no completed phase iii",
+            "no phase i data",  # NEW: natural compounds
+            "lacks phase i",  # NEW: natural compounds
+            "insufficient evidence",
+            "merely present",  # NEW: dysregulation requirement
+            "not dysregulated",  # NEW: dysregulation requirement
         ]):
             print(f"[PARSER] Analysis indicates NO interaction, skipping extraction")
             return []
@@ -96,9 +101,10 @@ Extract interactions **ONLY if the analysis concludes a valid, direct interactio
 If the analysis concludes **NO**, **NO VALID INTERACTION**, or indicates:
 
 * wrong pathway
-* missing Phase III data
+* missing Phase I data (natural compounds) OR Phase III/FDA (other drugs)  **NEW**
+* target merely "present" (not dysregulated)  **NEW**
 * indirect/downstream mechanism
-* lack of direct binding
+* regulatory relationships or pathway crosstalk  **NEW**
   then you must output:
 
 ```
@@ -111,6 +117,18 @@ If the analysis concludes **NO**, **NO VALID INTERACTION**, or indicates:
 
 The pathway must match **"{pathway_name}"** exactly.
 If the analysis references a different pathway name (even similar), return `[]`.
+
+---
+
+## **NEW: DYSREGULATION REQUIREMENT**
+
+**CRITICAL**: Only extract if target is DYSREGULATED:
+* overexpressed, OR
+* overactive, OR
+* mutated, OR
+* lost
+
+**DO NOT extract if target is only "present"** - this violates dysregulation requirement.
 
 ---
 
@@ -135,10 +153,11 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 * `agentName` must be exactly **"{agent_name}"**
 * `pathwayName` must be exactly **"{pathway_name}"**
 * `agentEffect` ∈ **["inhibits", "activates", "modulates"]**
-* `targetStatus` ∈ **["overexpressed", "overactive", "present", "mutated", "lost"]**
+* `targetStatus` ∈ **["overexpressed", "overactive", "mutated", "lost"]**  **NEW: removed "present"**
 * `mechanismType` must be **"direct"**
 * Maximum **3 cancer types**
 * If any required field is missing → output `[]`
+* If target is only "present" → output `[]`  **NEW: dysregulation requirement**
 * Output **JSON only**, no explanations
 
 ---
@@ -262,8 +281,14 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
             # Handle compound targetStatus (e.g., "overexpressed and mutated")
             # Extract first valid status if compound
+            # NEW: "present" is no longer valid - must be dysregulated
             target_status = item["targetStatus"].lower()
-            valid_statuses = ["overexpressed", "overactive", "present", "mutated", "lost"]
+            valid_statuses = ["overexpressed", "overactive", "mutated", "lost"]  # NEW: removed "present"
+
+            # NEW: Explicitly reject "present" status
+            if target_status == "present":
+                print(f"[PARSER] Rejecting targetStatus 'present' - dysregulation required")
+                continue
 
             # Check if it's already a valid single status
             if target_status not in valid_statuses:

@@ -21,11 +21,12 @@ class AgentEffect(str, Enum):
 
 
 class TargetStatus(str, Enum):
+    """NEW: Removed 'present' - target must be DYSREGULATED per logic-flow.md."""
     OVEREXPRESSED = "overexpressed"
     OVERACTIVE = "overactive"
-    PRESENT = "present"
     MUTATED = "mutated"
     LOST = "lost"
+    # PRESENT = "present"  # REMOVED: NEW constraint requires dysregulation
 
 
 class MechanismType(str, Enum):
@@ -57,95 +58,95 @@ class Interaction:
         )
 
 
-# Plaintext reasoning prompt for MediPhi (Step 1)
-MEDIPHI_PROMPT = """
-You are a **clinical oncology pharmacist** analyzing **therapeutic agent–pathway interactions** with strict criteria.
+# Plaintext reasoning prompt for MediPhi (Step 1) - Incorporates NEW constraints from logic-flow.md
+MEDIPHI_PROMPT = """You are a clinical oncology pharmacist analyzing therapeutic agent-pathway interactions with STRICT criteria.
 
-Input variables:
 **AGENT:** {agent_name}
 **CATEGORY:** {agent_category}
 **PATHWAY:** {pathway_name}
 
----
+## PRE-CHECK REQUIREMENT
 
-## **TASK**
+Before proceeding, MUST identify:
+1. {agent_name}'s PRIMARY molecular target
+2. Whether that target is a CORE COMPONENT of "{pathway_name}"
+3. If NO → immediately conclude "NO VALID INTERACTION"
 
-Determine whether **this exact agent** directly targets **this exact pathway**.
-The pathway name must match **verbatim**. No substitutions, parent pathways, sub-pathways, or related signaling families are allowed.
+## ANALYSIS SECTIONS
 
-Provide analysis using ONLY the following labelled sections. Keep all sections concise.
+### 1. MOLECULAR TARGET
+State {agent_name}'s PRIMARY molecular target (specific protein/gene/receptor). One sentence.
 
----
+### 2. PATHWAY COMPONENTS
+List 3-5 core components of pathway "{pathway_name}" (exact name).
 
-## **1. MOLECULAR TARGET**
+### 3. DIRECT INTERACTION CHECK
+YES/NO: Is target from Section 1 a component in Section 2?
+If NO → skip to Conclusion.
 
-State the **primary molecular target** (specific protein/gene/receptor) of {agent_name}.
-*One sentence only.*
+### 4. CLINICAL EVIDENCE
+**NEW RULES:**
+- **Natural compounds** (Curcumin, Resveratrol, EGCG, Artemisinin, Quercetin, Ascorbic Acid, Melatonin, Alpha Lipoic Acid, Methylene Blue, NTC, Sodium Phenyl Butyrate, Semaglutide):
+  * Require Phase I clinical trial data MINIMUM
+  * Most lack this → return NO
+- **FDA-approved drugs**: Verify FDA approval OR Phase III data
+- **Chemotherapy**: Limit to 2-3 pathways, primary mechanism only
+- **Immunotherapy**: Limit to 1 pathway, exclude downstream effects
 
----
+State: "YES — valid evidence" or "NO — insufficient evidence"
 
-## **2. PATHWAY COMPONENTS**
+### 5. PRIMARY MECHANISM
+Is "{pathway_name}" the PRIMARY mechanism (not downstream/secondary)? YES/NO
 
-List **3–5 core components** (proteins/genes) of the pathway **named exactly** "{pathway_name}".
-If pathway name is ambiguous, incomplete, or non-standard → mark as “Not a valid pathway name”.
+### 6. DYSREGULATION REQUIREMENT (NEW)
+**CRITICAL**: For each cancer type, the target must be:
+- Overexpressed, OR
+- Overactive, OR
+- Mutated, OR
+- Lost (for tumor suppressors)
 
----
+**NOT merely "present"** - must be DYSREGULATED.
 
-## **3. DIRECT INTERACTION CHECK**
+### 7. EXCLUSION CHECKS
+Verify NONE of these apply:
+- Regulatory relationships (e.g., PD-L1 affecting Tumor Antigen outcomes)
+- Downstream effects (e.g., checkpoint inhibition enhancing antigen response)
+- Pathway substitution (if discussing different pathway than "{pathway_name}")
+- Semantic association without direct molecular interaction
 
-Answer **YES/NO** for both:
+## CONCLUSION
 
-* Whether the target from Section 1 is within the components from Section 2.
-* Whether the agent binds/inhibits a component with the **exact same name** as a pathway element.
+**If ALL criteria met:**
+List up to 3 cancer types where:
+- Target is DYSREGULATED (overexpressed/overactive/mutated/lost, NOT "present")
+- Agent has required clinical evidence
+- Mechanism is PRIMARY and DIRECT
 
-If NO for either → stop further justification and proceed to Conclusion.
+For each: agentEffect (inhibits/activates/modulates), primaryTarget, targetStatus (must be overexpressed/overactive/mutated/lost)
 
----
+**If ANY criterion fails:**
+State: "NO VALID INTERACTION — [reason]"
+Common reasons:
+- No Phase I data (natural compounds)
+- No Phase III/FDA approval (other drugs)
+- Target not in pathway components
+- Pathway name mismatch
+- Downstream/indirect mechanism
+- Target merely present, not dysregulated
+- Exceeds pathway limit (chemo: 2-3, immuno: 1)
 
-## **4. CLINICAL EVIDENCE**
+## SPECIAL RULES BY CATEGORY
+- **Natural compounds**: Phase I minimum (most → NO)
+- **Chemotherapy**: Max 2-3 pathways
+- **Immunotherapy**: Max 1 pathway, no downstream
 
-Rules:
+## EXAMPLES
+**INCLUDE**: Imatinib + BCR-ABL signaling + CML (BCR-ABL overactive, FDA approved)
+**EXCLUDE**: Pembrolizumab + Tumor Antigen (PD-1 not in Tumor Antigen components)
+**EXCLUDE**: Curcumin + NF-κB (no Phase I data)
+**EXCLUDE**: Target "present" only (must be dysregulated)
 
-* **Natural compounds** (e.g., Curcumin, Resveratrol, EGCG, Green Tea, Turmeric): must have **published Phase III clinical trial results**. If not → “NO”.
-* **FDA-approved oncology drugs:** verify approval status.
-  State ONLY: “YES — valid evidence” or “NO — insufficient evidence”.
-
----
-
-## **5. PRIMARY MECHANISM**
-
-State whether the pathway "{pathway_name}" is the **primary mechanism**, or only **downstream/secondary**.
-
----
-
-## **6. CONCLUSION**
-
-If **all** criteria are met, provide:
-
-* up to **3 cancer types**,
-* each with **agentEffect** (“inhibits”, “activates”, or “modulates”),
-* the agent’s **primaryTarget**,
-* the **targetStatus** (“overexpressed”, “overactive”, “present”, “mutated”, or “lost”),
-* mechanismType = **“direct”**.
-
-If **any** criterion fails → output:
-**“NO VALID INTERACTION — {{brief reason}}”**
-(Use reasons such as: no Phase III data, target not in pathway, pathway mismatch, indirect mechanism.)
-
----
-
-### **STRICT RULES**
-
-* Natural compounds almost always → **NO** (no Phase III).
-* Pathway name must match **exactly**.
-* Only **direct binding** qualifies.
-* Keep outputs short.
-* Do not repeat information across sections.
-
----
-
-**Begin analysis:**
-"""
+Begin analysis:"""
 
 
 def generate_interaction(
