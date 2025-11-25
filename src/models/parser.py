@@ -80,33 +80,73 @@ class ResponseParser:
             return []
 
         # Mistral-style instruction format
-        prompt = f"""[INST] You are a JSON extraction assistant. Extract structured data from biomedical analysis.
+        prompt = f"""
+You are a **biomedical JSON-extraction assistant**.
+Your job is to extract structured agent–pathway–cancer interaction data from the following analysis.
 
-ANALYSIS:
+**ANALYSIS:**
 {plaintext}
 
-TASK: Extract valid agent-pathway-cancer interactions ONLY if the analysis concludes YES.
+---
 
-IMPORTANT: The pathway name must be "{pathway_name}" exactly. If the analysis discusses a different pathway (e.g., "PD-1 pathway" when asked about "Tumor Antigen"), return [].
+## **TASK**
 
-For each valid interaction, extract this exact JSON structure:
-- agentName: "{agent_name}" (must be exact)
-- pathwayName: "{pathway_name}" (must be exact)
-- agentEffect: "inhibits", "activates", or "modulates"
-- primaryTarget: the molecular target (protein/gene name)
-- cancerType: the specific cancer type
-- targetStatus: "overexpressed", "overactive", "present", "mutated", or "lost"
-- mechanismType: must be "direct"
+Extract interactions **ONLY if the analysis concludes a valid, direct interaction** between the agent and the exact pathway **"{pathway_name}"**.
 
-RULES:
-- If analysis says "NO VALID INTERACTION" or "NO" in conclusion, return: []
-- If analysis mentions Phase III data is lacking, return: []
-- If analysis discusses wrong pathway name, return: []
-- If mechanism is "downstream" or "indirect", return: []
-- Maximum 3 cancer types per agent-pathway pair
-- Return ONLY valid JSON array, nothing else
+If the analysis concludes **NO**, **NO VALID INTERACTION**, or indicates:
 
-Output (JSON only): [/INST]"""
+* wrong pathway
+* missing Phase III data
+* indirect/downstream mechanism
+* lack of direct binding
+  then you must output:
+
+```
+[]
+```
+
+---
+
+## **STRICT PATHWAY MATCHING**
+
+The pathway must match **"{pathway_name}"** exactly.
+If the analysis references a different pathway name (even similar), return `[]`.
+
+---
+
+## **OUTPUT FORMAT**
+
+Return ONLY a **JSON array** where each element adheres to the **exact object shape** below:
+
+```json
+{
+    "agentName": "",
+    "pathwayName": "",
+    "agentEffect": "",
+    "primaryTarget": "",
+    "cancerType": "",
+    "targetStatus": "",
+    "mechanismType": ""
+}
+```
+
+### **Requirements**
+
+* `agentName` must be exactly **"{agent_name}"**
+* `pathwayName` must be exactly **"{pathway_name}"**
+* `agentEffect` ∈ **["inhibits", "activates", "modulates"]**
+* `targetStatus` ∈ **["overexpressed", "overactive", "present", "mutated", "lost"]**
+* `mechanismType` must be **"direct"**
+* Maximum **3 cancer types**
+* If any required field is missing → output `[]`
+* Output **JSON only**, no explanations
+
+---
+
+## **FINAL INSTRUCTION**
+
+**Return JSON only. No text before or after.**
+"""
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 

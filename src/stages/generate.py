@@ -58,46 +58,94 @@ class Interaction:
 
 
 # Plaintext reasoning prompt for MediPhi (Step 1)
-MEDIPHI_PROMPT = """You are a clinical oncology pharmacist analyzing therapeutic agent-pathway interactions.
+MEDIPHI_PROMPT = """
+You are a **clinical oncology pharmacist** analyzing **therapeutic agent–pathway interactions** with strict criteria.
 
-AGENT: {agent_name}
-CATEGORY: {agent_category}
-PATHWAY: {pathway_name}
+Input variables:
+**AGENT:** {agent_name}
+**CATEGORY:** {agent_category}
+**PATHWAY:** {pathway_name}
 
-CRITICAL: You must evaluate if this SPECIFIC agent targets THIS SPECIFIC pathway name. Do NOT confuse with similar pathways.
+---
 
-Provide a structured analysis covering:
+## **TASK**
 
-1. MOLECULAR TARGET: What is {agent_name}'s primary molecular target (specific protein/receptor)?
+Determine whether **this exact agent** directly targets **this exact pathway**.
+The pathway name must match **verbatim**. No substitutions, parent pathways, sub-pathways, or related signaling families are allowed.
 
-2. PATHWAY COMPONENTS: What are the core components of the pathway called "{pathway_name}"? List 3-5 key proteins/genes.
+Provide analysis using ONLY the following labelled sections. Keep all sections concise.
 
-3. DIRECT INTERACTION CHECK:
-   - Is the agent's target from step 1 listed in the pathway components from step 2? (YES/NO)
-   - If the pathway is "{pathway_name}", does the agent bind/inhibit a component WITH THAT EXACT NAME?
+---
 
-4. CLINICAL EVIDENCE:
-   - For NATURAL compounds (Curcumin, Resveratrol, EGCG, Green Tea, Turmeric, etc.): MUST have completed Phase III clinical trials with published results
-   - For FDA-approved drugs: Verify approval status
-   - If no Phase III data exists, answer NO
+## **1. MOLECULAR TARGET**
 
-5. PRIMARY MECHANISM: Is "{pathway_name}" the agent's PRIMARY mechanism, or is it downstream/secondary?
+State the **primary molecular target** (specific protein/gene/receptor) of {agent_name}.
+*One sentence only.*
 
-6. CONCLUSION:
-   - If ALL criteria met: List up to 3 cancer types with agent effect and target status
-   - If ANY criterion fails: State "NO VALID INTERACTION" and explain which criterion failed
-   - Common failure reasons:
-     * Natural compound without Phase III data
-     * Agent targets different pathway (e.g., PD-1 pathway ≠ Tumor Antigen pathway)
-     * Downstream/indirect mechanism only
-     * Target not in core pathway components
+---
 
-STRICT RULES:
-- Natural compounds almost always have NO Phase III data → return NO
-- Pathway name must match EXACTLY (don't substitute similar pathways)
-- Only DIRECT binding to pathway components
+## **2. PATHWAY COMPONENTS**
 
-Begin analysis:"""
+List **3–5 core components** (proteins/genes) of the pathway **named exactly** "{pathway_name}".
+If pathway name is ambiguous, incomplete, or non-standard → mark as “Not a valid pathway name”.
+
+---
+
+## **3. DIRECT INTERACTION CHECK**
+
+Answer **YES/NO** for both:
+
+* Whether the target from Section 1 is within the components from Section 2.
+* Whether the agent binds/inhibits a component with the **exact same name** as a pathway element.
+
+If NO for either → stop further justification and proceed to Conclusion.
+
+---
+
+## **4. CLINICAL EVIDENCE**
+
+Rules:
+
+* **Natural compounds** (e.g., Curcumin, Resveratrol, EGCG, Green Tea, Turmeric): must have **published Phase III clinical trial results**. If not → “NO”.
+* **FDA-approved oncology drugs:** verify approval status.
+  State ONLY: “YES — valid evidence” or “NO — insufficient evidence”.
+
+---
+
+## **5. PRIMARY MECHANISM**
+
+State whether the pathway "{pathway_name}" is the **primary mechanism**, or only **downstream/secondary**.
+
+---
+
+## **6. CONCLUSION**
+
+If **all** criteria are met, provide:
+
+* up to **3 cancer types**,
+* each with **agentEffect** (“inhibits”, “activates”, or “modulates”),
+* the agent’s **primaryTarget**,
+* the **targetStatus** (“overexpressed”, “overactive”, “present”, “mutated”, or “lost”),
+* mechanismType = **“direct”**.
+
+If **any** criterion fails → output:
+**“NO VALID INTERACTION — {brief reason}”**
+(Use reasons such as: no Phase III data, target not in pathway, pathway mismatch, indirect mechanism.)
+
+---
+
+### **STRICT RULES**
+
+* Natural compounds almost always → **NO** (no Phase III).
+* Pathway name must match **exactly**.
+* Only **direct binding** qualifies.
+* Keep outputs short.
+* Do not repeat information across sections.
+
+---
+
+**Begin analysis:**
+"""
 
 
 def generate_interaction(
