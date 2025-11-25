@@ -129,7 +129,7 @@ If **all** criteria are met, provide:
 * mechanismType = **“direct”**.
 
 If **any** criterion fails → output:
-**“NO VALID INTERACTION — {brief reason}”**
+**“NO VALID INTERACTION — {{brief reason}}”**
 (Use reasons such as: no Phase III data, target not in pathway, pathway mismatch, indirect mechanism.)
 
 ---

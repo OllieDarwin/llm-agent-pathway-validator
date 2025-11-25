@@ -119,7 +119,7 @@ If the analysis references a different pathway name (even similar), return `[]`.
 Return ONLY a **JSON array** where each element adheres to the **exact object shape** below:
 
 ```json
-{
+{{
     "agentName": "",
     "pathwayName": "",
     "agentEffect": "",
@@ -127,7 +127,7 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
     "cancerType": "",
     "targetStatus": "",
     "mechanismType": ""
-}
+}}
 ```
 
 ### **Requirements**
