@@ -1,9 +1,12 @@
 """MediPhi-PubMed model wrapper for biomedical text generation."""
 
+import logging
 from pathlib import Path
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+logger = logging.getLogger(__name__)
 
 
 class MediPhiModel:
@@ -61,7 +64,7 @@ class MediPhiModel:
 
         # Debug: check input token count
         input_token_count = inputs["input_ids"].shape[1]
-        print(f"[MEDIPHI DEBUG] Input tokens: {input_token_count}")
+        logger.debug(f"Input tokens: {input_token_count}")
 
         with torch.no_grad():
             outputs = self.model.generate(
@@ -75,13 +78,13 @@ class MediPhiModel:
         # Decode only the new tokens
         output_token_count = outputs[0].shape[0]
         new_token_count = output_token_count - inputs["input_ids"].shape[1]
-        print(f"[MEDIPHI DEBUG] Output tokens generated: {new_token_count}")
+        logger.debug(f"Output tokens generated: {new_token_count}")
 
         response = self.tokenizer.decode(
             outputs[0][inputs["input_ids"].shape[1]:],
             skip_special_tokens=True,
         )
 
-        print(f"[MEDIPHI DEBUG] Response length: {len(response)} chars")
+        logger.debug(f"Response length: {len(response)} chars")
         return response.strip()
 

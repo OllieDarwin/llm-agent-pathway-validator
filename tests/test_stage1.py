@@ -11,6 +11,11 @@ from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
 from src.models.parser import ResponseParser
 from src.stages.generate import generate_interaction_with_reasoning
+from src.utils.logging_config import setup_logging, get_logger
+
+# Configure logging
+setup_logging(level="INFO")
+logger = get_logger(__name__)
 
 
 # Test cases - using pathways from all-tsnc-pathways.csv
@@ -71,20 +76,20 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
         "details": [],
     }
 
-    print("\n=== POSITIVE CONTROLS (should return interactions) ===\n")
+    logger.info("\n=== POSITIVE CONTROLS (should return interactions) ===\n")
 
     for test in POSITIVE_CONTROLS:
-        print(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
-        print("Generating analysis...")
+        logger.info(f"\n--- Testing: {test['agent'].name} + {test['pathway'].name} ---")
+        logger.info("Generating analysis...")
 
         interactions, reasoning = generate_interaction_with_reasoning(
             test["agent"], test["pathway"], model, parser
         )
 
-        print("Analysis complete.")
+        logger.info("Analysis complete.")
 
-        print(f"DEBUG: MediPhi reasoning length: {len(reasoning)} chars")
-        print(f"DEBUG: Number of interactions returned: {len(interactions)}")
+        logger.debug(f"MediPhi reasoning length: {len(reasoning)} chars")
+        logger.debug(f"Number of interactions returned: {len(interactions)}")
 
         passed = len(interactions) > 0
 
@@ -95,15 +100,15 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
             results["positive_failed"] += 1
             status = "FAIL"
 
-        print(f"\n[{status}] {test['description']}")
+        logger.info(f"\n[{status}] {test['description']}")
         if interactions:
             for i in interactions:
-                print(f"       -> {i.cancer_type} ({i.agent_effect.value} {i.primary_target})")
+                logger.info(f"       -> {i.cancer_type} ({i.agent_effect.value} {i.primary_target})")
         else:
-            print("       -> No interactions returned")
-            print(f"       DEBUG: Full reasoning:\n{reasoning}")
+            logger.warning("       -> No interactions returned")
+            logger.debug(f"       Full reasoning:\n{reasoning}")
 
-        print()
+        logger.info("")
 
         results["details"].append({
             "type": "positive",
@@ -120,7 +125,7 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
             ],
         })
 
-    print("\n=== NEGATIVE CONTROLS (should return empty) ===\n")
+    logger.info("\n=== NEGATIVE CONTROLS (should return empty) ===\n")
     for test in NEGATIVE_CONTROLS:
         interactions, reasoning = generate_interaction_with_reasoning(
             test["agent"], test["pathway"], model, parser
@@ -134,16 +139,16 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
             results["negative_failed"] += 1
             status = "FAIL"
 
-        print(f"[{status}] {test['description']}")
+        logger.info(f"[{status}] {test['description']}")
         if interactions:
             for i in interactions:
-                print(f"       -> UNEXPECTED: {i.cancer_type} ({i.agent_effect} {i.primary_target})")
+                logger.warning(f"       -> UNEXPECTED: {i.cancer_type} ({i.agent_effect} {i.primary_target})")
         else:
-            print("       -> Correctly returned empty")
+            logger.info("       -> Correctly returned empty")
 
         if verbose and not passed:
-            print(f"       REASONING:\n{reasoning[:500]}...")
-        print()
+            logger.debug(f"       REASONING:\n{reasoning[:500]}...")
+        logger.info("")
 
         results["details"].append({
             "type": "negative",
@@ -166,34 +171,34 @@ def run_tests(model: MediPhiModel, parser: ResponseParser, verbose: bool = True)
     total_passed = results["positive_passed"] + results["negative_passed"]
     total_tests = total_positive + total_negative
 
-    print("\n=== SUMMARY ===")
-    print(f"Positive controls: {results['positive_passed']}/{total_positive}")
-    print(f"Negative controls: {results['negative_passed']}/{total_negative}")
-    print(f"Overall: {total_passed}/{total_tests} ({100*total_passed/total_tests:.1f}%)")
+    logger.info("\n=== SUMMARY ===")
+    logger.info(f"Positive controls: {results['positive_passed']}/{total_positive}")
+    logger.info(f"Negative controls: {results['negative_passed']}/{total_negative}")
+    logger.info(f"Overall: {total_passed}/{total_tests} ({100*total_passed/total_tests:.1f}%)")
 
     return results
 
 
 def main():
-    print("=== TWO-STEP ARCHITECTURE ===")
-    print("Step 1: MediPhi-PubMed (biomedical reasoning)")
-    print("Step 2: Mistral-7B-Instruct (JSON extraction)\n")
+    logger.info("=== TWO-STEP ARCHITECTURE ===")
+    logger.info("Step 1: MediPhi-PubMed (biomedical reasoning)")
+    logger.info("Step 2: Mistral-7B-Instruct (JSON extraction)\n")
 
-    print("Loading MediPhi-PubMed model...")
+    logger.info("Loading MediPhi-PubMed model...")
     model = MediPhiModel(
         model_name=MEDIPHI_MODEL,
         cache_dir=MODEL_CACHE_DIR,
     )
     model.load()
-    print("MediPhi loaded.\n")
+    logger.info("MediPhi loaded.\n")
 
-    print("Loading Mistral parser model...")
+    logger.info("Loading Mistral parser model...")
     parser = ResponseParser(
         model_name=PARSER_MODEL,
         cache_dir=MODEL_CACHE_DIR,
     )
     parser.load()
-    print("Parser loaded.\n")
+    logger.info("Parser loaded.\n")
 
     results = run_tests(model, parser)
 
@@ -203,10 +208,10 @@ def main():
     accuracy = total_passed / total_tests
 
     if accuracy >= 0.9:
-        print(f"\nSUCCESS: {accuracy*100:.1f}% accuracy meets >=90% threshold")
+        logger.info(f"\nSUCCESS: {accuracy*100:.1f}% accuracy meets >=90% threshold")
         return 0
     else:
-        print(f"\nNEEDS IMPROVEMENT: {accuracy*100:.1f}% accuracy below 90% threshold")
+        logger.warning(f"\nNEEDS IMPROVEMENT: {accuracy*100:.1f}% accuracy below 90% threshold")
         return 1
 
 

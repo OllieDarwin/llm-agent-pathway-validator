@@ -6,12 +6,15 @@ TWO-STEP ARCHITECTURE:
 - Separation of concerns: domain knowledge vs. structured output
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 
 from src.data.loader import Agent, Pathway
 from src.models.mediphi import MediPhiModel
 from src.models.parser import ResponseParser
+
+logger = logging.getLogger(__name__)
 
 
 class AgentEffect(str, Enum):
@@ -172,12 +175,12 @@ def generate_interaction(
         pathway_name=pathway.name,
     )
 
-    print(f"[STAGE1] Step 1: MediPhi analyzing {agent.name} + {pathway.name}")
+    logger.info(f"Step 1: MediPhi analyzing {agent.name} + {pathway.name}")
     plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
-    print(f"[STAGE1] MediPhi generated {len(plaintext)} chars of reasoning")
+    logger.info(f"MediPhi generated {len(plaintext)} chars of reasoning")
 
     # Step 2: Parse plaintext into structured JSON
-    print(f"[STAGE1] Step 2: Mistral parsing to JSON")
+    logger.info("Step 2: Mistral parsing to JSON")
     interaction_dicts = parser.parse_interaction(
         plaintext=plaintext,
         agent_name=agent.name,
@@ -190,9 +193,9 @@ def generate_interaction(
         try:
             interaction = Interaction.from_dict(item)
             interactions.append(interaction)
-            print(f"[STAGE1] ✓ Valid: {interaction.cancer_type} ({interaction.agent_effect.value} {interaction.primary_target})")
+            logger.info(f"✓ Valid: {interaction.cancer_type} ({interaction.agent_effect.value} {interaction.primary_target})")
         except (KeyError, ValueError) as e:
-            print(f"[STAGE1] Failed to create Interaction: {e}")
+            logger.error(f"Failed to create Interaction: {e}")
             continue
 
     return interactions[:3]
@@ -216,12 +219,12 @@ def generate_interaction_with_reasoning(
         pathway_name=pathway.name,
     )
 
-    print(f"[STAGE1] Step 1: MediPhi analyzing {agent.name} + {pathway.name}")
+    logger.info(f"Step 1: MediPhi analyzing {agent.name} + {pathway.name}")
     plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
-    print(f"[STAGE1] MediPhi generated {len(plaintext)} chars of reasoning")
+    logger.info(f"MediPhi generated {len(plaintext)} chars of reasoning")
 
     # Step 2: Parse to JSON
-    print(f"[STAGE1] Step 2: Mistral parsing to JSON")
+    logger.info("Step 2: Mistral parsing to JSON")
     interaction_dicts = parser.parse_interaction(
         plaintext=plaintext,
         agent_name=agent.name,
@@ -234,9 +237,9 @@ def generate_interaction_with_reasoning(
         try:
             interaction = Interaction.from_dict(item)
             interactions.append(interaction)
-            print(f"[STAGE1] ✓ Valid: {interaction.cancer_type} ({interaction.agent_effect.value} {interaction.primary_target})")
+            logger.info(f"✓ Valid: {interaction.cancer_type} ({interaction.agent_effect.value} {interaction.primary_target})")
         except (KeyError, ValueError) as e:
-            print(f"[STAGE1] Failed to create Interaction: {e}")
+            logger.error(f"Failed to create Interaction: {e}")
             continue
 
     return interactions[:3], plaintext

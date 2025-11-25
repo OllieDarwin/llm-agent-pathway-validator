@@ -4,12 +4,15 @@ Uses Mistral-7B-Instruct for reliable JSON extraction from biomedical reasoning.
 """
 
 import json
+import logging
 import re
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.config import PARSER_MODEL, MODEL_CACHE_DIR
+
+logger = logging.getLogger(__name__)
 
 
 class ResponseParser:
@@ -34,7 +37,7 @@ class ResponseParser:
 
     def load(self) -> None:
         """Load parser model."""
-        print(f"[PARSER] Loading {self.model_name}...")
+        logger.info(f"Loading {self.model_name}...")
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             cache_dir=self.cache_dir,
@@ -50,7 +53,7 @@ class ResponseParser:
         if self.device == "cpu":
             self.model = self.model.to(self.device)
 
-        print(f"[PARSER] Model loaded on {self.device}")
+        logger.info(f"Model loaded on {self.device}")
 
     def parse_interaction(
         self,
@@ -81,7 +84,7 @@ class ResponseParser:
             "merely present",  # NEW: dysregulation requirement
             "not dysregulated",  # NEW: dysregulation requirement
         ]):
-            print(f"[PARSER] Analysis indicates NO interaction, skipping extraction")
+            logger.info("Analysis indicates NO interaction, skipping extraction")
             return []
 
         # Mistral-style instruction format
@@ -169,7 +172,7 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-        print(f"[PARSER] Extracting JSON from {len(plaintext)} chars...")
+        logger.info(f"Extracting JSON from {len(plaintext)} chars of reasoning")
 
         with torch.no_grad():
             outputs = self.model.generate(
@@ -185,10 +188,10 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
             skip_special_tokens=True,
         ).strip()
 
-        print(f"[PARSER] Raw output length: {len(response)} chars")
+        logger.debug(f"Raw parser output length: {len(response)} chars")
 
         result = self._extract_json(response, agent_name, pathway_name)
-        print(f"[PARSER] Extracted {len(result)} valid interactions")
+        logger.info(f"Extracted {len(result)} valid interactions")
 
         return result
 
@@ -240,7 +243,7 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
             except json.JSONDecodeError:
                 pass
 
-        print(f"[PARSER] Failed to extract valid JSON from response")
+        logger.warning("Failed to extract valid JSON from parser response")
         return []
 
     def _validate_interactions(
@@ -262,7 +265,7 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
             # Check required fields
             if not all(field in item for field in required_fields):
-                print(f"[PARSER] Skipping item with missing fields: {list(item.keys())}")
+                logger.debug(f"Skipping item with missing fields: {list(item.keys())}")
                 continue
 
             # Enforce exact name matching
@@ -271,12 +274,12 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
             # Only accept direct mechanisms
             if item.get("mechanismType") != "direct":
-                print(f"[PARSER] Skipping non-direct mechanism: {item.get('mechanismType')}")
+                logger.debug(f"Skipping non-direct mechanism: {item.get('mechanismType')}")
                 continue
 
             # Validate enum values
             if item["agentEffect"] not in ["inhibits", "activates", "modulates"]:
-                print(f"[PARSER] Invalid agentEffect: {item['agentEffect']}")
+                logger.debug(f"Invalid agentEffect: {item['agentEffect']}")
                 continue
 
             # Handle compound targetStatus (e.g., "overexpressed and mutated")
@@ -287,7 +290,7 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
             # NEW: Explicitly reject "present" status
             if target_status == "present":
-                print(f"[PARSER] Rejecting targetStatus 'present' - dysregulation required")
+                logger.info("Rejecting targetStatus 'present' - dysregulation required")
                 continue
 
             # Check if it's already a valid single status
@@ -301,9 +304,9 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
                 if found_status:
                     item["targetStatus"] = found_status
-                    print(f"[PARSER] Normalized compound status '{target_status}' to '{found_status}'")
+                    logger.debug(f"Normalized compound status '{target_status}' to '{found_status}'")
                 else:
-                    print(f"[PARSER] Invalid targetStatus: {item['targetStatus']}")
+                    logger.debug(f"Invalid targetStatus: {item['targetStatus']}")
                     continue
 
             valid.append(item)
