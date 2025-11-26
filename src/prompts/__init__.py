@@ -1,6 +1,6 @@
 """Prompt templates for different stages of the LLM agent pipeline."""
 
-from src.prompts.stage1 import REASONING_PROMPT, PARSING_PROMPT
+from prompts.stage1 import REASONING_PROMPT, PARSING_PROMPT
 
 __all__ = [
     "REASONING_PROMPT",

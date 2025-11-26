@@ -9,11 +9,11 @@ SIMPLE TWO-STEP ARCHITECTURE:
 import logging
 from dataclasses import dataclass
 
-from src.data.loader import Agent, Pathway
-from src.models.mediphi import MediPhiModel
-from src.models.parser import Parser
-from src.schemas.stage1 import AgentEffect, TargetStatus, MechanismType, InteractionSchema
-from src.prompts.stage1 import REASONING_PROMPT, PARSING_PROMPT
+from data.loader import Agent, Pathway
+from models.mediphi import MediPhiModel
+from models.parser import Parser
+from schemas.stage1 import AgentEffect, TargetStatus, MechanismType, InteractionSchema
+from prompts.stage1 import REASONING_PROMPT, PARSING_PROMPT
 
 logger = logging.getLogger(__name__)
 

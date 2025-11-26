@@ -3,6 +3,7 @@
 
 import sys
 import json
+import signal
 from pathlib import Path
 from datetime import datetime
 
@@ -16,16 +17,21 @@ from config import (
 from data.loader import load_agents, load_pathways, generate_combinations
 from models.mediphi import MediPhiModel
 from models.parser import Parser
-from stages.generate import generate_interactions_batch
 from utils.logging_config import setup_logging, get_logger
 
 # Setup logging
 setup_logging(level="INFO")
 logger = get_logger(__name__)
 
+# Global variable to store partial results
+_partial_results = None
+_results_saved = False
+
 
 def run_stage1(agents, pathways, mediphi, parser):
     """Stage 1: Generate initial agent-pathway-cancer interactions."""
+    global _partial_results
+
     logger.info("\n" + "="*60)
     logger.info("STAGE 1: Generate Interactions")
     logger.info("="*60 + "\n")
@@ -33,17 +39,24 @@ def run_stage1(agents, pathways, mediphi, parser):
     combinations = generate_combinations(agents, pathways)
     logger.info(f"Processing {len(combinations)} agent-pathway combinations")
 
-    def progress(current, total, agent_name, pathway_name):
-        if current % 100 == 0 or current == total:
-            pct = (current / total) * 100
-            logger.info(f"  [{current}/{total} - {pct:.1f}%] {agent_name} + {pathway_name}")
+    # Process one combination at a time so we can save partial results
+    from stages.generate import generate_interaction
 
-    results = generate_interactions_batch(
-        combinations=combinations,
-        model=mediphi,
-        parser=parser,
-        progress_callback=progress,
-    )
+    results = {}
+
+    for i, (agent, pathway) in enumerate(combinations):
+        # Update partial results after each combination
+        key = (agent.name, pathway.name)
+        interactions = generate_interaction(agent, pathway, mediphi, parser)
+        results[key] = interactions
+
+        # Update global partial results (for Ctrl+C handler)
+        _partial_results = results
+
+        # Progress logging
+        if (i + 1) % 100 == 0 or (i + 1) == len(combinations):
+            pct = ((i + 1) / len(combinations)) * 100
+            logger.info(f"  [{i + 1}/{len(combinations)} - {pct:.1f}%] Progress checkpoint")
 
     # Summary
     total_interactions = sum(len(interactions) for interactions in results.values())
@@ -113,12 +126,16 @@ def run_stage5(stage4_results):
     return stage4_results
 
 
-def save_results(results, stage_num):
+def save_results(results, stage_num, partial=False):
     """Save stage results to JSON."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = Path(f"stage{stage_num}_results_{timestamp}.json")
+    global _results_saved
 
-    logger.info(f"\nSaving Stage {stage_num} results to {output_file}")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = "partial_" if partial else ""
+    output_file = Path(f"{prefix}stage{stage_num}_results_{timestamp}.json")
+
+    status = "partial" if partial else "complete"
+    logger.info(f"\nSaving {status} Stage {stage_num} results to {output_file}")
 
     # Convert to serializable format
     results_serializable = {
@@ -141,14 +158,45 @@ def save_results(results, stage_num):
         json.dump(results_serializable, f, indent=2)
 
     logger.info(f"✓ Results saved to {output_file}")
+    logger.info(f"  - Combinations processed: {len(results_serializable)}")
+
+    _results_saved = True
+    return output_file
+
+
+def signal_handler(sig, frame):
+    """Handle Ctrl+C gracefully - save partial results."""
+    global _partial_results, _results_saved
+
+    logger.info("\n\n" + "="*60)
+    logger.info("⚠️  INTERRUPTED BY USER (Ctrl+C)")
+    logger.info("="*60)
+
+    if _partial_results is not None and not _results_saved:
+        logger.info("\nSaving partial results before exit...")
+        try:
+            output_file = save_results(_partial_results, stage_num=1, partial=True)
+            logger.info(f"\n✓ Partial results saved successfully!")
+            logger.info(f"  Resume later by excluding already-processed combinations")
+        except Exception as e:
+            logger.error(f"\n✗ Failed to save partial results: {e}")
+    else:
+        logger.info("\nNo partial results to save.")
+
+    logger.info("\nExiting...")
+    sys.exit(0)
 
 
 def main():
     """Run the full 5-stage pipeline."""
+    # Register signal handler for graceful Ctrl+C handling
+    signal.signal(signal.SIGINT, signal_handler)
+
     logger.info("="*60)
     logger.info("TUMOUR SIGNALLING PANEL PIPELINE")
     logger.info("="*60)
     logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("(Press Ctrl+C to save partial results and exit)")
 
     # Load data
     logger.info("\nLoading agents and pathways...")

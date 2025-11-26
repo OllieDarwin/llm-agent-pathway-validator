@@ -12,7 +12,7 @@ import torch
 from pydantic import BaseModel, ValidationError
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.config import MODEL_CACHE_DIR
+from config import MODEL_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
