@@ -1,30 +1,42 @@
-"""Parser model for extracting structured JSON from plaintext LLM output.
+"""Parser for extracting structured data from plaintext using LLMs.
 
-Uses Mistral-7B-Instruct for reliable JSON extraction from biomedical reasoning.
+Uses a schema-driven approach compatible with any pipeline stage.
 """
 
 import json
 import logging
 import re
+from typing import Any, Type
 
 import torch
+from pydantic import BaseModel, ValidationError
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from src.config import PARSER_MODEL, MODEL_CACHE_DIR
+from src.config import MODEL_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
 
-class ResponseParser:
-    """Parses plaintext biomedical reasoning into structured JSON using Mistral."""
+class Parser:
+    """Parser for extracting structured data from plaintext using LLMs.
+
+    Can be used across all pipeline stages with different schemas and prompts.
+    """
 
     def __init__(
         self,
-        model_name: str | None = None,
+        model_name: str,
         cache_dir: str | None = None,
         device: str | None = None,
     ):
-        self.model_name = model_name or PARSER_MODEL
+        """Initialize parser with a specific model.
+
+        Args:
+            model_name: HuggingFace model identifier (e.g., 'mistralai/Mistral-7B-Instruct-v0.2')
+            cache_dir: Directory for caching model files (for Hartree offline mode)
+            device: Device to use ('cuda', 'cpu', or None for auto-detection)
+        """
+        self.model_name = model_name
         self.cache_dir = cache_dir or MODEL_CACHE_DIR
 
         if device is None:
@@ -36,7 +48,7 @@ class ResponseParser:
         self.model = None
 
     def load(self) -> None:
-        """Load parser model."""
+        """Load the parser model into memory."""
         logger.info(f"Loading {self.model_name}...")
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
@@ -55,130 +67,47 @@ class ResponseParser:
 
         logger.info(f"Model loaded on {self.device}")
 
-    def parse_interaction(
+    def parse(
         self,
-        plaintext: str,
-        agent_name: str,
-        pathway_name: str,
+        text: str,
+        schema: Type[BaseModel],
+        context: dict[str, Any],
+        prompt_template: str,
+        max_new_tokens: int = 400,
+        temperature: float = 0.1,
     ) -> list[dict]:
-        """
-        Parse MediPhi's plaintext reasoning into structured interaction JSON.
+        """Parse plaintext into structured data according to a Pydantic schema.
 
-        Returns list of interaction dicts, or empty list if no valid interactions.
+        Args:
+            text: The plaintext to parse (e.g., biomedical reasoning from MediPhi)
+            schema: Pydantic model class defining the output structure
+            context: Dictionary of variables to format into the prompt template
+            prompt_template: Prompt template with placeholders (must include {plaintext})
+            max_new_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (lower = more deterministic)
+
+        Returns:
+            List of validated dictionaries matching the schema, or empty list if parsing fails
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load() first.")
 
-        # Quick check: if analysis explicitly says NO, skip parsing (NEW: added Phase I check)
-        plaintext_lower = plaintext.lower()
-        if any(phrase in plaintext_lower for phrase in [
-            "no valid interaction",
-            "conclusion: no",
-            "does not directly target",
-            "lacks phase iii",
-            "no phase iii data",
-            "no completed phase iii",
-            "no phase i data",  # NEW: natural compounds
-            "lacks phase i",  # NEW: natural compounds
-            "insufficient evidence",
-            "merely present",  # NEW: dysregulation requirement
-            "not dysregulated",  # NEW: dysregulation requirement
-        ]):
-            logger.info("Analysis indicates NO interaction, skipping extraction")
-            return []
+        # Add the text to context
+        context["plaintext"] = text
 
-        # Mistral-style instruction format
-        prompt = f"""
-You are a **biomedical JSON-extraction assistant**.
-Your job is to extract structured agent–pathway–cancer interaction data from the following analysis.
+        # Format the prompt
+        prompt = prompt_template.format(**context)
 
-**ANALYSIS:**
-{plaintext}
-
----
-
-## **TASK**
-
-Extract interactions **ONLY if the analysis concludes a valid, direct interaction** between the agent and the exact pathway **"{pathway_name}"**.
-
-If the analysis concludes **NO**, **NO VALID INTERACTION**, or indicates:
-
-* wrong pathway
-* missing Phase I data (natural compounds) OR Phase III/FDA (other drugs)  **NEW**
-* target merely "present" (not dysregulated)  **NEW**
-* indirect/downstream mechanism
-* regulatory relationships or pathway crosstalk  **NEW**
-  then you must output:
-
-```
-[]
-```
-
----
-
-## **STRICT PATHWAY MATCHING**
-
-The pathway must match **"{pathway_name}"** exactly.
-If the analysis references a different pathway name (even similar), return `[]`.
-
----
-
-## **NEW: DYSREGULATION REQUIREMENT**
-
-**CRITICAL**: Only extract if target is DYSREGULATED:
-* overexpressed, OR
-* overactive, OR
-* mutated, OR
-* lost
-
-**DO NOT extract if target is only "present"** - this violates dysregulation requirement.
-
----
-
-## **OUTPUT FORMAT**
-
-Return ONLY a **JSON array** where each element adheres to the **exact object shape** below:
-
-```json
-{{
-    "agentName": "",
-    "pathwayName": "",
-    "agentEffect": "",
-    "primaryTarget": "",
-    "cancerType": "",
-    "targetStatus": "",
-    "mechanismType": ""
-}}
-```
-
-### **Requirements**
-
-* `agentName` must be exactly **"{agent_name}"**
-* `pathwayName` must be exactly **"{pathway_name}"**
-* `agentEffect` ∈ **["inhibits", "activates", "modulates"]**
-* `targetStatus` ∈ **["overexpressed", "overactive", "mutated", "lost"]**  **NEW: removed "present"**
-* `mechanismType` must be **"direct"**
-* Maximum **3 cancer types**
-* If any required field is missing → output `[]`
-* If target is only "present" → output `[]`  **NEW: dysregulation requirement**
-* Output **JSON only**, no explanations
-
----
-
-## **FINAL INSTRUCTION**
-
-**Return JSON only. No text before or after.**
-"""
-
+        # Generate with the model
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-        logger.info(f"Extracting JSON from {len(plaintext)} chars of reasoning")
+        logger.debug(f"Parsing {len(text)} chars of text with {schema.__name__}")
 
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=400,
-                temperature=0.1,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
                 do_sample=True,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
@@ -190,34 +119,35 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
 
         logger.debug(f"Raw parser output length: {len(response)} chars")
 
-        result = self._extract_json(response, agent_name, pathway_name)
-        logger.info(f"Extracted {len(result)} valid interactions")
+        # Extract and validate JSON
+        result = self._extract_and_validate_json(response, schema)
+        logger.info(f"Extracted {len(result)} valid {schema.__name__} objects")
 
         return result
 
-    def _extract_json(
+    def _extract_and_validate_json(
         self,
         response: str,
-        agent_name: str,
-        pathway_name: str,
+        schema: Type[BaseModel],
     ) -> list[dict]:
-        """Extract and validate JSON from response."""
+        """Extract JSON from response and validate against schema.
+
+        Tries multiple strategies to extract JSON from model output.
+        """
         # Strategy 1: Direct JSON parse
         try:
             data = json.loads(response.strip())
-            if isinstance(data, list):
-                return self._validate_interactions(data, agent_name, pathway_name)
+            return self._validate_data(data, schema)
         except json.JSONDecodeError:
             pass
 
         # Strategy 2: Extract from markdown code blocks
         if "```" in response:
-            match = re.search(r"```(?:json)?\s*([\s\S]*?)```", response)
+            match = re.search(r"```(?:json)?\\s*([\\s\\S]*?)```", response)
             if match:
                 try:
                     data = json.loads(match.group(1).strip())
-                    if isinstance(data, list):
-                        return self._validate_interactions(data, agent_name, pathway_name)
+                    return self._validate_data(data, schema)
                 except json.JSONDecodeError:
                     pass
 
@@ -227,8 +157,7 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
         if start != -1 and end > start:
             try:
                 data = json.loads(response[start:end])
-                if isinstance(data, list):
-                    return self._validate_interactions(data, agent_name, pathway_name)
+                return self._validate_data(data, schema)
             except json.JSONDecodeError:
                 pass
 
@@ -238,78 +167,53 @@ Return ONLY a **JSON array** where each element adheres to the **exact object sh
         if start != -1 and end > start:
             try:
                 obj = json.loads(response[start:end])
-                if isinstance(obj, dict):
-                    return self._validate_interactions([obj], agent_name, pathway_name)
+                return self._validate_data([obj], schema)
             except json.JSONDecodeError:
                 pass
 
-        logger.warning("Failed to extract valid JSON from parser response")
+        logger.warning(f"Failed to extract valid JSON for {schema.__name__}")
         return []
 
-    def _validate_interactions(
+    def _validate_data(
         self,
-        data: list,
-        agent_name: str,
-        pathway_name: str,
+        data: Any,
+        schema: Type[BaseModel],
     ) -> list[dict]:
-        """Validate and clean interaction data."""
-        valid = []
-        required_fields = [
-            "agentName", "pathwayName", "agentEffect",
-            "primaryTarget", "cancerType", "targetStatus", "mechanismType"
-        ]
+        """Validate data against Pydantic schema.
 
+        Args:
+            data: Raw data from JSON parsing (should be list or dict)
+            schema: Pydantic model class to validate against
+
+        Returns:
+            List of validated dictionaries
+        """
+        # Handle empty response
+        if not data:
+            return []
+
+        # Ensure we have a list
+        if isinstance(data, dict):
+            data = [data]
+
+        if not isinstance(data, list):
+            logger.warning(f"Expected list or dict, got {type(data)}")
+            return []
+
+        # Validate each item
+        validated = []
         for item in data:
             if not isinstance(item, dict):
+                logger.debug(f"Skipping non-dict item: {type(item)}")
                 continue
 
-            # Check required fields
-            if not all(field in item for field in required_fields):
-                logger.debug(f"Skipping item with missing fields: {list(item.keys())}")
+            try:
+                # Validate with Pydantic
+                validated_obj = schema(**item)
+                # Convert back to dict for consistency
+                validated.append(validated_obj.model_dump())
+            except ValidationError as e:
+                logger.debug(f"Validation failed for item: {e}")
                 continue
 
-            # Enforce exact name matching
-            item["agentName"] = agent_name
-            item["pathwayName"] = pathway_name
-
-            # Only accept direct mechanisms
-            if item.get("mechanismType") != "direct":
-                logger.debug(f"Skipping non-direct mechanism: {item.get('mechanismType')}")
-                continue
-
-            # Validate enum values
-            if item["agentEffect"] not in ["inhibits", "activates", "modulates"]:
-                logger.debug(f"Invalid agentEffect: {item['agentEffect']}")
-                continue
-
-            # Handle compound targetStatus (e.g., "overexpressed and mutated")
-            # Extract first valid status if compound
-            # NEW: "present" is no longer valid - must be dysregulated
-            target_status = item["targetStatus"].lower()
-            valid_statuses = ["overexpressed", "overactive", "mutated", "lost"]  # NEW: removed "present"
-
-            # NEW: Explicitly reject "present" status
-            if target_status == "present":
-                logger.info("Rejecting targetStatus 'present' - dysregulation required")
-                continue
-
-            # Check if it's already a valid single status
-            if target_status not in valid_statuses:
-                # Try to extract first valid status from compound
-                found_status = None
-                for status in valid_statuses:
-                    if status in target_status:
-                        found_status = status
-                        break
-
-                if found_status:
-                    item["targetStatus"] = found_status
-                    logger.debug(f"Normalized compound status '{target_status}' to '{found_status}'")
-                else:
-                    logger.debug(f"Invalid targetStatus: {item['targetStatus']}")
-                    continue
-
-            valid.append(item)
-
-        # Max 3 interactions
-        return valid[:3]
+        return validated
