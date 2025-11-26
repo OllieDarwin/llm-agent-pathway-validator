@@ -8,14 +8,14 @@ from pathlib import Path
 from datetime import datetime
 
 from config import (
-    MEDIPHI_MODEL,
+    REASONING_MODEL,
     PARSER_MODEL,
     MODEL_CACHE_DIR,
     AGENTS_CSV,
     PATHWAYS_CSV,
 )
 from data.loader import load_agents, load_pathways, generate_combinations
-from models.mediphi import MediPhiModel
+from models.reasoning import ReasoningModel
 from models.parser import Parser
 from utils.logging_config import setup_logging, get_logger
 
@@ -28,7 +28,7 @@ _partial_results = None
 _results_saved = False
 
 
-def run_stage1(agents, pathways, mediphi, parser):
+def run_stage1(agents, pathways, reasoning_model, parser):
     """Stage 1: Generate initial agent-pathway-cancer interactions."""
     global _partial_results
 
@@ -47,7 +47,7 @@ def run_stage1(agents, pathways, mediphi, parser):
     for i, (agent, pathway) in enumerate(combinations):
         # Update partial results after each combination
         key = (agent.name, pathway.name)
-        interactions = generate_interaction(agent, pathway, mediphi, parser)
+        interactions = generate_interaction(agent, pathway, reasoning_model, parser)
         results[key] = interactions
 
         # Update global partial results (for Ctrl+C handler)
@@ -208,9 +208,9 @@ def main():
 
     # Load models for Stage 1
     logger.info("\nLoading models...")
-    logger.info(f"  - MediPhi: {MEDIPHI_MODEL}")
-    mediphi = MediPhiModel(model_name=MEDIPHI_MODEL, cache_dir=MODEL_CACHE_DIR)
-    mediphi.load()
+    logger.info(f"  - Reasoning: {REASONING_MODEL}")
+    reasoning_model = ReasoningModel(model_name=REASONING_MODEL, cache_dir=MODEL_CACHE_DIR)
+    reasoning_model.load()
 
     logger.info(f"  - Parser: {PARSER_MODEL}")
     parser = Parser(model_name=PARSER_MODEL, cache_dir=MODEL_CACHE_DIR)
@@ -219,7 +219,7 @@ def main():
     logger.info("✓ Models loaded")
 
     # Run pipeline stages
-    stage1_results = run_stage1(agents, pathways, mediphi, parser)
+    stage1_results = run_stage1(agents, pathways, reasoning_model, parser)
     save_results(stage1_results, stage_num=1)
 
     stage2_results = run_stage2(stage1_results)

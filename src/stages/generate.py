@@ -1,8 +1,8 @@
 """Stage 1: generateInteraction() - Initial biological filter.
 
 SIMPLE TWO-STEP ARCHITECTURE:
-1. MediPhi generates plaintext biomedical reasoning
-2. Mistral parser extracts structured JSON
+1. Reasoning model generates plaintext biomedical reasoning
+2. Parser extracts structured JSON
 3. Filter to keep only hasInteraction=True responses
 """
 
@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass
 
 from data.loader import Agent, Pathway
-from models.mediphi import MediPhiModel
+from models.reasoning import ReasoningModel
 from models.parser import Parser
 from schemas.stage1 import AgentEffect, TargetStatus, MechanismType, InteractionSchema
 from prompts.stage1 import REASONING_PROMPT, PARSING_PROMPT
@@ -46,14 +46,14 @@ class Interaction:
 def generate_interaction(
     agent: Agent,
     pathway: Pathway,
-    model: MediPhiModel,
+    model: ReasoningModel,
     parser: Parser,
 ) -> list[Interaction]:
     """Generate validated agent-pathway-cancer interactions.
 
     Simple flow:
-    1. MediPhi analyzes agent + pathway
-    2. Mistral parses reasoning to JSON
+    1. Reasoning model analyzes agent + pathway
+    2. Parser extracts JSON
     3. Filter for hasInteraction=True
     4. Convert to Interaction objects
 
@@ -105,7 +105,7 @@ def generate_interaction(
 def generate_interaction_with_reasoning(
     agent: Agent,
     pathway: Pathway,
-    model: MediPhiModel,
+    model: ReasoningModel,
     parser: Parser,
 ) -> tuple[list[Interaction], str]:
     """Same as generate_interaction but also returns plaintext reasoning.
@@ -152,7 +152,7 @@ def generate_interaction_with_reasoning(
 
 def generate_interactions_batch(
     combinations: list[tuple[Agent, Pathway]],
-    model: MediPhiModel,
+    model: ReasoningModel,
     parser: Parser,
     progress_callback: callable = None,
 ) -> dict[tuple[str, str], list[Interaction]]:
@@ -160,8 +160,8 @@ def generate_interactions_batch(
 
     Args:
         combinations: List of (Agent, Pathway) tuples
-        model: Loaded MediPhiModel
-        parser: Loaded GenericParser
+        model: Loaded ReasoningModel
+        parser: Loaded Parser
         progress_callback: Optional callback(current, total, agent_name, pathway_name)
 
     Returns:

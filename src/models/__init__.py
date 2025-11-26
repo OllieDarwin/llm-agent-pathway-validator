@@ -1,9 +1,9 @@
 """Model wrappers for biomedical LLMs."""
 
-from .mediphi import MediPhiModel
+from .reasoning import ReasoningModel
 from .parser import Parser
 
 __all__ = [
-    "MediPhiModel",
+    "ReasoningModel",
     "Parser",
 ]

@@ -1,4 +1,4 @@
-"""MediPhi-PubMed model wrapper for biomedical text generation."""
+"""Reasoning model wrapper for biomedical text generation."""
 
 import logging
 from pathlib import Path
@@ -9,12 +9,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 logger = logging.getLogger(__name__)
 
 
-class MediPhiModel:
-    """Wrapper for microsoft/MediPhi-PubMed model."""
+class ReasoningModel:
+    """Wrapper for biomedical reasoning models (e.g., microsoft/MediPhi-PubMed)."""
 
     def __init__(
         self,
-        model_name: str = "microsoft/MediPhi-PubMed",
+        model_name: str,
         cache_dir: Path | str | None = None,
         device: str | None = None,
     ):

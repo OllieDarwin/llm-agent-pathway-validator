@@ -79,7 +79,7 @@ class Parser:
         """Parse plaintext into structured data according to a Pydantic schema.
 
         Args:
-            text: The plaintext to parse (e.g., biomedical reasoning from MediPhi)
+            text: The plaintext to parse (e.g., biomedical reasoning from reasoning model)
             schema: Pydantic model class defining the output structure
             context: Dictionary of variables to format into the prompt template
             prompt_template: Prompt template with placeholders (must include {plaintext})
