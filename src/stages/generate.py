@@ -70,13 +70,22 @@ def generate_interaction(
     logger.info(f"Analyzing: {agent.name} + {pathway.name}")
     plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
 
+    # Log reasoning for debugging
+    logger.debug(f"Reasoning output ({len(plaintext)} chars):\n{plaintext[:500]}...")
+
     # Step 2: Parse to JSON and filter
     context = {"agent_name": agent.name, "pathway_name": pathway.name}
+
+    # Stage-specific instruction to enforce exact name matching
+    stage_instructions = f"""CRITICAL: The agentName field MUST be exactly "{agent.name}" and pathwayName MUST be exactly "{pathway.name}".
+If the analysis mentions other agents, ignore them. Only extract data about {agent.name}."""
+
     all_results = parser.parse(
         text=plaintext,
         schema=InteractionSchema,
         context=context,
         prompt_template=PARSING_PROMPT,
+        stage_instructions=stage_instructions,
     )
 
     # Filter for hasInteraction=True
@@ -122,11 +131,16 @@ def generate_interaction_with_reasoning(
     plaintext = model.generate(prompt, max_new_tokens=512, temperature=0.3)
 
     context = {"agent_name": agent.name, "pathway_name": pathway.name}
+
+    stage_instructions = f"""CRITICAL: The agentName field MUST be exactly "{agent.name}" and pathwayName MUST be exactly "{pathway.name}".
+If the analysis mentions other agents, ignore them. Only extract data about {agent.name}."""
+
     all_results = parser.parse(
         text=plaintext,
         schema=InteractionSchema,
         context=context,
         prompt_template=PARSING_PROMPT,
+        stage_instructions=stage_instructions,
     )
 
     interaction_dicts = [r for r in all_results if r.get("hasInteraction", False)]

@@ -127,7 +127,7 @@ def run_stage5(stage4_results):
 
 
 def save_results(results, stage_num, partial=False):
-    """Save stage results to JSON."""
+    """Save stage results to JSON as a flat array."""
     global _results_saved
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -137,10 +137,11 @@ def save_results(results, stage_num, partial=False):
     status = "partial" if partial else "complete"
     logger.info(f"\nSaving {status} Stage {stage_num} results to {output_file}")
 
-    # Convert to serializable format
-    results_serializable = {
-        f"{agent}_{pathway}": [
-            {
+    # Convert to flat array of interactions (skip empty results)
+    results_array = []
+    for (agent, pathway), interactions in results.items():
+        for i in interactions:
+            results_array.append({
                 "agent_name": i.agent_name,
                 "pathway_name": i.pathway_name,
                 "cancer_type": i.cancer_type,
@@ -148,17 +149,14 @@ def save_results(results, stage_num, partial=False):
                 "primary_target": i.primary_target,
                 "target_status": i.target_status.value,
                 "mechanism_type": i.mechanism_type.value,
-            }
-            for i in interactions
-        ]
-        for (agent, pathway), interactions in results.items()
-    }
+            })
 
     with open(output_file, "w") as f:
-        json.dump(results_serializable, f, indent=2)
+        json.dump(results_array, f, indent=2)
 
     logger.info(f"✓ Results saved to {output_file}")
-    logger.info(f"  - Combinations processed: {len(results_serializable)}")
+    logger.info(f"  - Interactions found: {len(results_array)}")
+    logger.info(f"  - Combinations processed: {len(results)}")
 
     _results_saved = True
     return output_file

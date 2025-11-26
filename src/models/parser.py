@@ -75,6 +75,7 @@ class Parser:
         prompt_template: str,
         max_new_tokens: int = 400,
         temperature: float = 0.1,
+        stage_instructions: str = "",
     ) -> list[dict]:
         """Parse plaintext into structured data according to a Pydantic schema.
 
@@ -85,6 +86,7 @@ class Parser:
             prompt_template: Prompt template with placeholders (must include {plaintext})
             max_new_tokens: Maximum tokens to generate
             temperature: Sampling temperature (lower = more deterministic)
+            stage_instructions: Optional stage-specific instructions to append to prompt
 
         Returns:
             List of validated dictionaries matching the schema, or empty list if parsing fails
@@ -97,6 +99,10 @@ class Parser:
 
         # Format the prompt
         prompt = prompt_template.format(**context)
+
+        # Append stage-specific instructions if provided
+        if stage_instructions:
+            prompt = prompt + "\n\n" + stage_instructions
 
         # Generate with the model
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
