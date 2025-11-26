@@ -91,9 +91,25 @@ If the analysis mentions other agents, ignore them. Only extract data about {age
     # Filter for hasInteraction=True
     interaction_dicts = [r for r in all_results if r.get("hasInteraction", False)]
 
-    # Step 3: Convert to Interaction objects
+    # Step 3: Convert to Interaction objects and validate agent name
     interactions = []
     for item in interaction_dicts:
+        # CRITICAL: Reject if agent name doesn't match (model hallucination)
+        if item.get("agentName") != agent.name:
+            logger.warning(
+                f"✗ REJECTED: Parser returned wrong agent '{item.get('agentName')}' "
+                f"instead of '{agent.name}' - model hallucination detected"
+            )
+            continue
+
+        # Also validate pathway name
+        if item.get("pathwayName") != pathway.name:
+            logger.warning(
+                f"✗ REJECTED: Parser returned wrong pathway '{item.get('pathwayName')}' "
+                f"instead of '{pathway.name}'"
+            )
+            continue
+
         try:
             interaction = Interaction.from_dict(item)
             interactions.append(interaction)

@@ -2,20 +2,26 @@
 
 REASONING_PROMPT = """You are a clinical oncology pharmacist analyzing whether a therapeutic agent directly modulates a biological pathway in cancer.
 
-**AGENT:** {agent_name}
-**CATEGORY:** {agent_category}
-**PATHWAY:** {pathway_name}
+**AGENT TO ANALYZE:** {agent_name}
+**AGENT CATEGORY:** {agent_category}
+**PATHWAY TO ANALYZE:** {pathway_name}
+
+CRITICAL INSTRUCTIONS:
+- You must ONLY analyze {agent_name}
+- Do NOT mention, compare to, or discuss ANY other drugs
+- Do NOT use examples from other agents
+- If {agent_name} does NOT directly target {pathway_name}, simply say NO
 
 Analyze whether {agent_name} has a **direct, clinically-validated interaction** with the {pathway_name} pathway.
 
-Consider:
+Consider ONLY for {agent_name}:
 1. What is {agent_name}'s primary molecular target?
 2. Is that target a core component of the {pathway_name} pathway?
 3. Does {agent_name} have clinical evidence (FDA approval OR Phase I+ trials)?
 4. Is this the agent's PRIMARY mechanism of action?
 5. In which cancer types is the target dysregulated (overexpressed/overactive/mutated/lost)?
 
-Provide your analysis and conclusion (YES or NO).
+Provide your analysis and conclusion for {agent_name} ONLY (YES or NO).
 
 Begin analysis:"""
 

@@ -32,21 +32,44 @@ class ReasoningModel:
 
     def load(self) -> None:
         """Load model and tokenizer. Call this before inference."""
+        from config import USE_4BIT_QUANTIZATION, USE_8BIT_QUANTIZATION
+
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             cache_dir=self.cache_dir,
             trust_remote_code=True,
         )
 
+        # Prepare model loading kwargs
+        load_kwargs = {
+            "cache_dir": self.cache_dir,
+            "trust_remote_code": True,
+        }
+
+        # Add quantization config if enabled (for large models like 70B)
+        if USE_4BIT_QUANTIZATION and self.device == "cuda":
+            from transformers import BitsAndBytesConfig
+            load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+            )
+            logger.info("Using 4-bit quantization (reduces VRAM ~4x)")
+        elif USE_8BIT_QUANTIZATION and self.device == "cuda":
+            load_kwargs["load_in_8bit"] = True
+            logger.info("Using 8-bit quantization (reduces VRAM ~2x)")
+        else:
+            load_kwargs["torch_dtype"] = torch.float16 if self.device == "cuda" else torch.float32
+            load_kwargs["device_map"] = "auto" if self.device == "cuda" else None
+
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            cache_dir=self.cache_dir,
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-            device_map="auto" if self.device == "cuda" else None,
-            trust_remote_code=True,
+            **load_kwargs
         )
 
-        if self.device == "cpu":
+        # Only move to device if not using quantization (quantization handles device placement)
+        if self.device == "cpu" and not (USE_4BIT_QUANTIZATION or USE_8BIT_QUANTIZATION):
             self.model = self.model.to(self.device)
 
     def generate(
